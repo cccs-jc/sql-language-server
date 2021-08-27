@@ -1,4 +1,5 @@
 {
+    
     "functions": [
         {
             "name": "!",
@@ -1413,6 +1414,99 @@
     
     "tables": [
         {
+            "columns": [
+              {
+                "columnName": "id",
+                "description": "integer",
+                "metadata": {},
+                "type": "integer"
+              },
+              {
+                "columnName": "name",
+                "description": "string",
+                "metadata": {
+                  "description": "new description"
+                },
+                "type": "string"
+              },
+              {
+                "columnName": "age",
+                "description": "integer",
+                "metadata": {},
+                "type": "integer"
+              },
+              {
+                "columnName": "books",
+                "description": "array",
+                "metadata": {},
+                "type": "array"
+              },
+              {
+                "columnName": "books.title",
+                "description": "string",
+                "metadata": {},
+                "type": "string"
+              },
+              {
+                "columnName": "books.chapters",
+                "description": "array",
+                "metadata": {},
+                "type": "array"
+              },
+              {
+                "columnName": "books.chapters.paragraph",
+                "description": "string",
+                "metadata": {},
+                "type": "string"
+              },
+              {
+                "columnName": "struct_col",
+                "description": "struct",
+                "metadata": {},
+                "type": "struct"
+              },
+              {
+                "columnName": "struct_col.address",
+                "description": "struct",
+                "metadata": {},
+                "type": "struct"
+              },
+              {
+                "columnName": "struct_col.address.streetName",
+                "description": "string",
+                "metadata": {},
+                "type": "string"
+              },
+              {
+                "columnName": "struct_col.address.streetNumber",
+                "description": "long",
+                "metadata": {},
+                "type": "long"
+              },
+              {
+                "columnName": "map_col",
+                "description": "map",
+                "metadata": {},
+                "type": "map"
+              },
+              {
+                "columnName": "map_col.key.key.start",
+                "description": "long",
+                "metadata": {},
+                "type": "long"
+              },
+              {
+                "columnName": "map_col.key.key.end",
+                "description": "long",
+                "metadata": {},
+                "type": "long"
+              }
+            ],
+            "database": null,
+            "tableName": "student"
+          }
+      ,
+          {
             "database": null,
             "tableName": "nested_table",
             "columns": [

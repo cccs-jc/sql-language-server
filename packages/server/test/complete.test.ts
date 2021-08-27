@@ -31,19 +31,40 @@ describe('keyword completion', () => {
       expect(result.candidates.length).toEqual(1)
       expect(result.candidates[0].label).toEqual('FROM')
     })
-  test("complete FROM word with norm columns", () => {
-    const result = complete('SELECT d, f A', { line: 0, column: 13 })
-    expect(result.candidates.length).toEqual(1)
-    expect(result.candidates[0].label).toEqual('AS')
+    test("complete FROM word with norm columns", () => {
+      const result = complete('SELECT d, f A', { line: 0, column: 13 })
+      expect(result.candidates.length).toEqual(1)
+      expect(result.candidates[0].label).toEqual('AS')
+    })
   })
-})
 
   test("complete 'WHERE' keyword", () => {
     const result = complete('SELECT * FROM FOO W', { line: 0, column: 19 })
     expect(result.candidates.length).toEqual(1)
     expect(result.candidates[0].label).toEqual('WHERE')
   })
+  
+  test("complete 'WHERE' keyword one space", () => {
+    const result = complete('SELECT * FROM FOO AS foo W', { line: 0, column: 26 })
+    expect(result.candidates.length).toEqual(1)
+    expect(result.candidates[0].label).toEqual('WHERE')
+  })
 
+  test("complete 'WHERE' keyword two spaces", () => {
+    const result = complete('SELECT * FROM FOO AS foo  W', { line: 0, column: 27 })
+    expect(result.candidates.length).toEqual(1)
+    expect(result.candidates[0].label).toEqual('WHERE')
+  })
+
+  test("complete 'WHERE' keyword multi-line", () => {
+    const result = complete(`
+    SELECT * 
+    FROM FOO AS foo
+    W
+    `, { line: 3, column: 5 })
+    expect(result.candidates.length).toEqual(1)
+    expect(result.candidates[0].label).toEqual('WHERE')
+  })
 
   test("complete 'DISTINCT' keyword", () => {
     const result = complete('SELECT D', { line: 0, column: 9 })
@@ -313,8 +334,9 @@ describe('cursor on dot', () => {
   // TODO should support this
   test("not complete column name when a cursor is on dot in from clause", () => {
     const result = complete('SELECT TABLE1.COLUMN1 FROM TABLE1.', { line: 0, column: 34 }, SIMPLE_SCHEMA)
-    expect(result.candidates.map(v => v.label)).not.toContain('COLUMN1')
-    expect(result.candidates.map(v => v.label)).not.toContain('COLUMN2')
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual('COLUMN1')
+    expect(result.candidates[1].label).toEqual('COLUMN2')
   })
 
   // TODO should support this

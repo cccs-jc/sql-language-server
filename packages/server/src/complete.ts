@@ -163,15 +163,6 @@ function getFunctionCondidates(prefix: string, functions: DbFunction[]): Complet
 
 }
 
-function isCursorOnFromClause(sql: string, pos: Pos) {
-  try {
-    const ast = parse(sql) as SelectStatement
-    return !!getFromNodeByPos(ast.from?.tables || [], pos)
-  } catch (_e) {
-    return false
-  }
-}
-
 function getCandidatedForIncompleteSubquery(incompleteSubquery: IncompleteSubqueryNode, pos: Pos, schema: Schema): CompletionItem[] {
   let candidates: CompletionItem[] = []
   const parsedFromClause = getFromNodesFromClause(incompleteSubquery.text)
@@ -250,20 +241,13 @@ function getAliasCandidates(fromNodes: FromTableNode[], tables: Table[], partial
   })
 }
 
-function getCandidatesForError(target: string, schema: Schema, pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
+function getCandidatesForError(target: string, schema: Schema, _pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
   switch (e.message) {
     // 'INSERT INTO TABLE1 (C'
     // 'UPDATE TABLE1 SET C'
     case 'EXPECTED COLUMN NAME': {
       return getColumnCondidates('', schema.tables)
     }
-  }
-  const removedLastDotTarget = target.slice(0, target.length - 1)
-  // Do not complete column name when a cursor is on dot in from clause
-  // SELECT TABLE1.COLUMN1 FROM TABLE1.
-  const testPos = { line: pos.line, column: pos.column - 1 }
-  if (isCursorOnFromClause(removedLastDotTarget, testPos)) {
-    return []
   }
 
   let candidates = extractExpectedLiterals(e.expected || [])

@@ -34,8 +34,8 @@ Given a database schema it can also auto-complete column and table names. Howeve
 We have extended `sql-language-server` to support
 
 - configuration via the JupyterLab advanced settings
+- loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads.
 - nested columns names using multi-part dot seperated paths
-- loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads. 
 - visually distinct icons for `table`, `column`, `alias`, `functions` suggestions
 - added support for code-completion of
 	- functions including descriptions
@@ -43,9 +43,18 @@ We have extended `sql-language-server` to support
 	- table alias followed by dot
 	- partially typed columns including multi-part fields (needed insertText)
 
+- support for spaces in column names, code complete with back ticks (future work)
+- no support for fully qualified table names `databaseName.schemaName.tableName` (might be something we want to support)
 
 
 ## JupyterLab using sql-language-server 
+
+Install it https://jupyterlab-lsp.readthedocs.io/en/latest/Language%20Servers.html
+
+This is just like using npm install.
+```
+jlpm add --dev sql-language-server
+```
 
 JupyterLab finds modules to load using a LanguageServerManagerAPI.
 In the logs you will see it look for a sql-language-server, it's looking for cli.js.
@@ -61,23 +70,24 @@ In JupyterLab it's going to look for a 500 bytes cli.js script in the location `
 
 JupyterLab logs you should see these lines
 ```
-<LspStdIoReader(parent=<LanguageServerSession(language_server=sql-language-server, argv=['/usr/local/bin/node', '/Users/jccote/notebooks/node_modules/sql-language-server/dist/bin/cli.js', 'up', '--method', 'stdio'])>)> 
+<LspStdIoReader(parent=<LanguageServerSession(language_server=sql-language-server, argv=['/usr/local/bin/node', '/Users/jc/notebooks/node_modules/sql-language-server/dist/bin/cli.js', 'up', '--method', 'stdio'])>)> 
 
-D 2021-08-06 10:37:37.104 ServerApp] Checking for /Users/jccote/notebooks/node_modules/sql-language-server/dist/bin/cli.js
+D 2021-08-06 10:37:37.104 ServerApp] Checking for /Users/jc/notebooks/node_modules/sql-language-server/dist/bin/cli.js
 
 [D 2021-08-06 10:42:50.690 ServerApp] [lsp] The following Language Servers will be available: {
       "sql-language-server": {
         "argv": [
           "/usr/local/bin/node",
-          "--inspect-brk",
-          "/Users/jccote/notebooks/node_modules/sql-language-server/dist/bin/cli.js",
+          "/Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server/dist/bin/cli.js",
           "up",
-          "--debug",
           "--method",
           "stdio"
 ```
 
-## Building sql-language-server from source code
+So looks like it was installed in `/Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server`
+
+
+## Building our own sql-language-server from source code
 
 Note: I replaced all package.json versions to fixed versions by removing the ^
 
@@ -97,14 +107,24 @@ $ cd packages/server
 $ npm run prepublish
 ```
 
+
 JupyterLab installed the plugin in `~/notebooks/node_modules/sql-language-server`
-# I'm replacing it with my build using a soft link
-```
-rm -rf ~/notebooks/node_modules/sql-language-server
-ln -s  ~/node_modules/sql-language-server ~/notebooks/sql-language-server/packages/server/
+# Swapping original with our own version
+
 ```
 
-I can now work on the packages/server code and rebuilt it as I need to
+mv /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server.back
+
+cd /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/
+
+ln -s /Users/jc/jupyter-ext/sql-language-server/packages/server/ ./sql-language-server
+
+$ ls sql-language-server
+lrwxr-xr-x  1 jc  staff    62B 20 Aug 17:06 sql-language-server@ -> /Users/jc/jupyter-ext/sql-language-server/packages/server/
+
+```
+
+You can now work on the packages/server code and rebuilt it as you need to
 ```
 $ cd packages/server
 $ npm run prepublish
@@ -153,7 +173,48 @@ In order for the `%%sql` magic is handled by a "transclusion" which is built int
 The transclusion stripts the `%%sql` and returns the remaining text a mimics a `.sql` file extension. See
 https://github.com/krassowski/jupyterlab-lsp/blob/39010530eba400bffc56282709343e9fcf8bc778/packages/jupyterlab-lsp/src/transclusions/ipython-sql/extractors.ts
 
+You can see in the `.virtual_documents` folder the code that transclusions extract.
 
+## Configuring sql-language-server in JupyterLab
+
+> Advanced Settings -> Language Server
+```
+{
+    "logAllCommunication": true,
+    "loggingLevel": "debug",
+    "setTrace": "verbose",
+    "language_servers": {
+        "sql-language-server": {
+            "serverSettings": {
+                "sqlLanguageServer": {
+                    "connections": [
+                        {
+                            "name": "jupyterlab-conf",
+                            "adapter": "json",   
+                            "filename": "/Users/jc/jupyter-ext/sql-language-server/packages/server/test/fixtures/schema-file-example.json"
+                        }
+                    ],
+                        
+                    "lint": {
+                        "rules": {
+                            "align-column-to-the-first": "error",
+                            "column-new-line": "error",
+                            "linebreak-after-clause-keyword": "off",
+                            "reserved-word-case": [
+                                "error",
+                                "upper"
+                            ],
+                            "space-surrounding-operators": "error",
+                            "where-clause-new-line": "error",
+                            "align-where-clause-to-the-first": "error"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
 
 ## VsCode IDE using sql-language-server 
 
