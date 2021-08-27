@@ -10,7 +10,7 @@
                         {
                             "name": "jupyterlab-conf",
                             "adapter": "json",   
-                            "filename": "/Users/jccote/.config/sql-language-server/schema.json"
+                            "filename": "/Users/jccote/notebooks/sql-language-server/packages/server/test/fixtures/schema-file-example.json"
                         }
                     ],
                         
