@@ -590,8 +590,8 @@ function peg$parse(input, options) {
       peg$c115 = peg$classExpectation([["A", "Z"], ["a", "z"], "_"], false, false),
       peg$c116 = /^[A-Za-z0-9_]/,
       peg$c117 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_"], false, false),
-      peg$c118 = /^[A-Za-z0-9_:]/,
-      peg$c119 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_", ":"], false, false),
+      peg$c118 = /^[A-Za-z0-9_:[\]']/,
+      peg$c119 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_", ":", "[", "]", "'"], false, false),
       peg$c120 = ":",
       peg$c121 = peg$literalExpectation(":", false),
       peg$c122 = function(l) { 
@@ -5464,10 +5464,10 @@ function peg$parse(input, options) {
     s1 = peg$parseident_start();
     if (s1 !== peg$FAILED) {
       s2 = [];
-      s3 = peg$parsecolumn_part();
+      s3 = peg$parsecolumn_char();
       while (s3 !== peg$FAILED) {
         s2.push(s3);
-        s3 = peg$parsecolumn_part();
+        s3 = peg$parsecolumn_char();
       }
       if (s2 !== peg$FAILED) {
         s3 = [];
@@ -5481,11 +5481,11 @@ function peg$parse(input, options) {
         }
         if (s5 !== peg$FAILED) {
           s6 = [];
-          s7 = peg$parsecolumn_part();
+          s7 = peg$parsecolumn_char();
           if (s7 !== peg$FAILED) {
             while (s7 !== peg$FAILED) {
               s6.push(s7);
-              s7 = peg$parsecolumn_part();
+              s7 = peg$parsecolumn_char();
             }
           } else {
             s6 = peg$FAILED;
@@ -5513,11 +5513,11 @@ function peg$parse(input, options) {
           }
           if (s5 !== peg$FAILED) {
             s6 = [];
-            s7 = peg$parsecolumn_part();
+            s7 = peg$parsecolumn_char();
             if (s7 !== peg$FAILED) {
               while (s7 !== peg$FAILED) {
                 s6.push(s7);
-                s7 = peg$parsecolumn_part();
+                s7 = peg$parsecolumn_char();
               }
             } else {
               s6 = peg$FAILED;
@@ -5561,10 +5561,10 @@ function peg$parse(input, options) {
     s1 = peg$parseident_start();
     if (s1 !== peg$FAILED) {
       s2 = [];
-      s3 = peg$parsecolumn_part();
+      s3 = peg$parsecolumn_char();
       while (s3 !== peg$FAILED) {
         s2.push(s3);
-        s3 = peg$parsecolumn_part();
+        s3 = peg$parsecolumn_char();
       }
       if (s2 !== peg$FAILED) {
         peg$savedPos = s0;
@@ -5638,7 +5638,7 @@ function peg$parse(input, options) {
     return s0;
   }
 
-  function peg$parsecolumn_part() {
+  function peg$parsecolumn_char() {
     var s0;
 
     if (peg$c118.test(input.charAt(peg$currPos))) {

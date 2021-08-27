@@ -44,4 +44,20 @@ describe('nested columns', () => {
       expect(result.columns[1].expr).toMatchObject({ column: '`col1`.`sub1`', table: 'tab1', type: 'column_ref' })
       expect(result.columns[2].expr).toMatchObject({ column: '`sub field`.`sub field2`', table: 'nestedwithspaces', type: 'column_ref' })
    })
- })
+ 
+   it('column ref using subscript (array, map)', () => {
+    const sql = `
+      SELECT
+        array_col[4],
+        T1.map_col['key']
+      FROM T1 as tab1
+    `
+     const result = parse(sql)
+     expect(result).toBeDefined()
+     expect(result).toMatchObject({ type: 'select' })
+     // This is not technically correct since it does not detect the table
+     expect(result.columns[0].expr).toMatchObject({ column: 'array_col[4]', table: '', type: 'column_ref' })
+     expect(result.columns[1].expr).toMatchObject({ column: "map_col['key']", table: 'T1', type: 'column_ref' })
+  })
+
+})

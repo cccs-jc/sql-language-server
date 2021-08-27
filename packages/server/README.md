@@ -33,6 +33,7 @@ Given a database schema it can also auto-complete column and table names. Howeve
 
 We have extended `sql-language-server` to support
 
+- Updated version of VSCode dependecy to v7.0.0
 - Added new `adapter` configuration option named `json`. Which allows for loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads.
 - Small fixes to allow configuration via the JupyterLab advanced settings
 - Nested columns names using multi-part dot seperated paths
@@ -43,6 +44,7 @@ We have extended `sql-language-server` to support
 	- Table alias
 	- Table alias followed by dot
 	- Partially typed columns including multi-part fields (needed insertText)
+    - Map and Array subscripts `map_col['key'].<tab>`, `array_col[0].<tab>`
 
 
 - no support for fully qualified table names `databaseName.schemaName.tableName` (might be something we want to support)

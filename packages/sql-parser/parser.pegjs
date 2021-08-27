@@ -798,12 +798,12 @@ backtik_column = '`' chars:[^`]+ '`'
 
 // cccs-jc: added dot to support column names like `student.books.chapters`
 column_name
-  = ident_start column_part* ([.] column_part+)* {
+  = ident_start column_char* ([.] column_char+)* {
      return text();
   }
 
 column_nameY
-  =  start:ident_start parts:column_part* { return start + parts.join(''); }
+  =  start:ident_start parts:column_char* { return start + parts.join(''); }
 
 ident_name  
   =  start:ident_start parts:ident_part* { return start + parts.join(''); }
@@ -813,7 +813,7 @@ ident_start = [A-Za-z_]
 ident_part  = [A-Za-z0-9_]
 
 //to support column name like `cf1:name` in hbase
-column_part  = [A-Za-z0-9_:]
+column_char  = [A-Za-z0-9_:\[\]\']
 
 
 param 

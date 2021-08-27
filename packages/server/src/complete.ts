@@ -198,10 +198,18 @@ function createTablesFromFromNodes(fromNodes: FromTableNode[]): Table[] {
   }, [])
 }
 
-function getLastTokenIncludingDot(sql: string) {
-  const match = sql.match(/^(?:.|\s)*[^A-z0-9\.:](.*?)$/)
-  if (!match) { return sql }
-  return match[1]
+export function getLastTokenIncludingDot(sql: string) {
+  const match = sql.match(/^(?:.|\s)*[^A-z0-9\.:'](.*?)$/)
+  if (match) {
+    let prevToken = '';
+    let currentToken = match[1];
+    while (currentToken != prevToken) {
+      prevToken = currentToken;
+      currentToken = prevToken.replace(/\[.*?\]/, '');
+    }
+    return currentToken;
+   }
+  return sql;
 }
 
 function getColumnCandidatesByTableScope(tables: Table[], scopedPartialColumName: string): CompletionItem[] {
@@ -418,6 +426,7 @@ function filterCandidatesByLastToken(target: string, candidates: CompletionItem[
       //     return true;
       //   }
       // }
+
       return col.startsWith(lastToken)
     })
     .map(v => {
@@ -445,7 +454,7 @@ function filterCandidatesByLastToken(target: string, candidates: CompletionItem[
     })
 }
 
-export default function complete(sql: string, pos: Pos, schema: Schema = { tables: [], functions: [] }) {
+export function complete(sql: string, pos: Pos, schema: Schema = { tables: [], functions: [] }) {
   logger.debug(`start complete: ${sql}, ${JSON.stringify(pos)}`)
   let candidates: CompletionItem[] = []
   let error = null;

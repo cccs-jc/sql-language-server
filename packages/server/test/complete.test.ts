@@ -1,4 +1,4 @@
-import complete from '../src/complete'
+import {complete, getLastTokenIncludingDot} from '../src/complete'
 
 import createDiagnostics from '../src/createDiagnostics'
 
@@ -456,7 +456,62 @@ describe('Nested ColumnName completion', () => {
     expect(result.candidates[0].insertText).toEqual(' spaces`')
     expect(result.candidates[1].insertText).toEqual(' spaces`.`sub space`')
   })
+
+  test("getLastTokenIncludingDot", () => {
+    expect(getLastTokenIncludingDot("SELECT  abc")).toEqual("abc")
+    expect(getLastTokenIncludingDot("SELECT  abc.def")).toEqual("abc.def")
+    expect(getLastTokenIncludingDot("SELECT  abc[0]")).toEqual("abc")
+    expect(getLastTokenIncludingDot("SELECT  abc[0].")).toEqual("abc.")
+    expect(getLastTokenIncludingDot("SELECT  abc[0].d")).toEqual("abc.d")
+    expect(getLastTokenIncludingDot("SELECT  abc[0].def[0]")).toEqual("abc.def")
+    expect(getLastTokenIncludingDot("SELECT  abc[0].def[0].")).toEqual("abc.def.")
+    expect(getLastTokenIncludingDot("SELECT  abc[0].def[0].g")).toEqual("abc.def.g")
+
+    expect(getLastTokenIncludingDot("SELECT  abc['key']")).toEqual("abc")
+    expect(getLastTokenIncludingDot("SELECT  abc['key.name'].")).toEqual("abc.")
+    expect(getLastTokenIncludingDot("SELECT  abc['key'].d")).toEqual("abc.d")
+    expect(getLastTokenIncludingDot("SELECT  abc['key'].def['key']")).toEqual("abc.def")
+    expect(getLastTokenIncludingDot("SELECT  abc['key'].def['key'].")).toEqual("abc.def.")
+    expect(getLastTokenIncludingDot("SELECT  abc['key'].def[0].g")).toEqual("abc.def.g")
+  })
+
+  test("with array subscripted", () => {
+    const result = complete('SELECT t.abc[0]. FROM TABLE1 as t', { line: 0, column: 16 }, SIMPLE_NESTED_SCHEMA)
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual('abc.def')
+    expect(result.candidates[1].label).toEqual('abc.def.ghi')
+    expect(result.candidates[0].insertText).toEqual('def')
+    expect(result.candidates[1].insertText).toEqual('def.ghi')
+  })
+  
+  test("with array subscripted, first char", () => {
+    const result = complete('SELECT t.abc[0].d FROM TABLE1 as t', { line: 0, column: 17 }, SIMPLE_NESTED_SCHEMA)
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual('abc.def')
+    expect(result.candidates[1].label).toEqual('abc.def.ghi')
+    expect(result.candidates[0].insertText).toEqual('ef')
+    expect(result.candidates[1].insertText).toEqual('ef.ghi')
+  })
+
+  test("with map subscripted", () => {
+    const result = complete("SELECT t.abc['key']. FROM TABLE1 as t", { line: 0, column: 20 }, SIMPLE_NESTED_SCHEMA)
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual("abc.def")
+    expect(result.candidates[1].label).toEqual("abc.def.ghi")
+    expect(result.candidates[0].insertText).toEqual("def")
+    expect(result.candidates[1].insertText).toEqual("def.ghi")
+  })
+  
+  test("with map subscripted, first char", () => {
+    const result = complete("SELECT t.abc['key'].d FROM TABLE1 as t", { line: 0, column: 21 }, SIMPLE_NESTED_SCHEMA)
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual("abc.def")
+    expect(result.candidates[1].label).toEqual("abc.def.ghi")
+    expect(result.candidates[0].insertText).toEqual("ef")
+    expect(result.candidates[1].insertText).toEqual("ef.ghi")
+  })
 })
+
 
 const COMPLEX_SCHEMA = {
   tables: [
