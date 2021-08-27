@@ -582,8 +582,8 @@ function peg$parse(input, options) {
       peg$c111 = peg$classExpectation([["A", "Z"], ["a", "z"], "_"], false, false),
       peg$c112 = /^[A-Za-z0-9_]/,
       peg$c113 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_"], false, false),
-      peg$c114 = /^[A-Za-z0-9_:]/,
-      peg$c115 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_", ":"], false, false),
+      peg$c114 = /^[A-Za-z0-9_:.]/,
+      peg$c115 = peg$classExpectation([["A", "Z"], ["a", "z"], ["0", "9"], "_", ":", "."], false, false),
       peg$c116 = ":",
       peg$c117 = peg$literalExpectation(":", false),
       peg$c118 = function(l) { 
