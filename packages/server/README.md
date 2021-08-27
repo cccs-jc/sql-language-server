@@ -121,7 +121,7 @@ npm link
 # Check that it worked
 ls -lh /Users/jc/miniconda3/envs/jupyterlab-ext/lib/node_modules/sql-language-server
 
-lrwxr-xr-x  1 jc  staff    62B 23 Aug 08:11 /Users/jccote/miniconda3/envs/jupyterlab-ext/lib/node_modules/sql-language-server@ -> ../../../../../jupyter-ext/sql-language-server/packages/server
+lrwxr-xr-x  1 jc  staff    62B 23 Aug 08:11 /Users/jc/miniconda3/envs/jupyterlab-ext/lib/node_modules/sql-language-server@ -> ../../../../../jupyter-ext/sql-language-server/packages/server
 
 ```
 

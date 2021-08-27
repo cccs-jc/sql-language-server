@@ -3,7 +3,7 @@
       {
         "name": "vscode-conf",
         "adapter": "json",
-        "filename": "/Users/jccote/.config/sql-language-server/schema.json"
+        "filename": "/tmp/schema.json"
       }
     ],
     "sqlLanguageServer.lint": {
