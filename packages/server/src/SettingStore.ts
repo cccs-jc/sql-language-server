@@ -13,9 +13,10 @@ export type SSHConfig = {
   passphrase?: string
   identityFile?: string
 }
+// jcc: added a new adapter named 'json' to load schema from json file
 export type Connection = {
   name: string | null,
-  adapter: 'mysql' | 'postgresql' | 'postgres' | 'sqlite3' | null,
+  adapter: 'json' | 'mysql' | 'postgresql' | 'postgres' | 'sqlite3' | null,
   host: string | null
   port: number | null
   user: string | null
@@ -119,7 +120,14 @@ export default class SettingStore extends EventEmitter.EventEmitter {
 
   async setSettingFromWorkspaceConfig(connections: Connection[], projectPath: string = '') {
     this.personalConfig = { connections }
-    const extractedPersonalConfig = this.extractPersonalConfigMatchedProjectPath(projectPath)
+    let extractedPersonalConfig = this.extractPersonalConfigMatchedProjectPath(projectPath)
+    // jcc: JupyterLab does not pass a projectPath
+    //      default to first connection if none are matched
+    if (extractedPersonalConfig == undefined) {
+      if (connections?.length > 0) {
+        extractedPersonalConfig = connections[0]
+      }
+    }
     this.setSetting(extractedPersonalConfig || {})
     return this.getSetting()
   }

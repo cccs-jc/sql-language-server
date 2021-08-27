@@ -8,7 +8,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument' 
 import { CodeAction, TextDocumentEdit, TextEdit, Position, CodeActionKind } from 'vscode-languageserver-types'
 import cache from './cache'
-import complete from './complete'
+import { complete } from './complete'
 import createDiagnostics from './createDiagnostics'
 import createConnection from './createConnection'
 import yargs from 'yargs'
@@ -19,11 +19,21 @@ import initializeLogging from './initializeLogging'
 import { lint, LintResult } from 'sqlint'
 import log4js from 'log4js'
 import { RequireSqlite3Error } from './database_libs/Sqlite3Client'
+import * as fs from 'fs'
+//import { NONAME } from 'dns'
+import { RawConfig } from 'sqlint'
+
 
 export type ConnectionMethod = 'node-ipc' | 'stdio'
 type Args = {
 	method?: ConnectionMethod
 }
+
+// jcc to read schema file
+function readFile(filePath: string) {
+  return fs.readFileSync(filePath, "utf8").replace(/^\ufeff/u, "");
+}
+
 
 export function createServerWithConnection(connection: Connection) {
   initializeLogging()
@@ -33,14 +43,21 @@ export function createServerWithConnection(connection: Connection) {
   let schema: Schema = []
   let hasConfigurationCapability = false
   let rootPath = ''
+  let lintConfig: RawConfig | null | undefined
 
   async function makeDiagnostics(document: TextDocument) {
+
+    /*
+    jcc: no need to load lint here
+    litConfig is loaded on configuration chagnes
+
     const lintConfig = hasConfigurationCapability && (
       await connection.workspace.getConfiguration({
         section: 'sqlLanguageServer',
       })
     )?.lint || {}
-    const hasRules = lintConfig.hasOwnProperty('rules')
+    */
+    const hasRules = lintConfig?.hasOwnProperty('rules')
     const diagnostics = createDiagnostics(
       document.uri,
       document.getText(),
@@ -56,7 +73,19 @@ export function createServerWithConnection(connection: Connection) {
 
   connection.onInitialize((params): InitializeResult => {
     const capabilities = params.capabilities
+    /*
     hasConfigurationCapability = !!capabilities.workspace && !!capabilities.workspace.configuration;
+
+    jcc:  JupyterLab sends didChangeConfiguration information
+          using both the workspace.configuration and
+          workspace.didChangeConfiguration instead
+    */
+
+    hasConfigurationCapability = !!capabilities.workspace && (
+      !!capabilities.workspace.configuration ||
+      !!capabilities.workspace.didChangeConfiguration );
+
+
     logger.debug(`onInitialize: ${params.rootPath}`)
     rootPath = params.rootPath || ''
 
@@ -90,21 +119,46 @@ export function createServerWithConnection(connection: Connection) {
         } catch (e) {
           logger.error(e)
         }
-        try {
-          const client = getDatabaseClient(
-            SettingStore.getInstance().getSetting()
-          )
-          schema = await client.getSchema()
-          logger.debug("get schema")
-          logger.debug(JSON.stringify(schema))
-        } catch (e) {
-          logger.error("failed to get schema info")
-          if (e instanceof RequireSqlite3Error) {
-            connection.sendNotification('sqlLanguageServer.error', {
-              message: "Need to rebuild sqlite3 module."
-            })
+        // jcc: added check for loading schema from json file
+        var setting = SettingStore.getInstance().getSetting()
+        if (setting.adapter == 'json') {
+            var path = setting.filename || ""
+            if (path == "") {
+              logger.error("filename must be provided")
+              connection.sendNotification('sqlLanguageServer.error', {
+                  message: "filename must be provided"
+              })
+              throw "filename must be provided"
+            }
+            try {
+              schema = JSON.parse(readFile(path));
+            }
+            catch(e) {
+              logger.error("failed to read schema file")
+              connection.sendNotification('sqlLanguageServer.error', {
+                  message: "Failed to read schema file: " + path + " error: " + e.message
+              })
+              throw e
+            }
+        }
+        else {
+          // jcc: else get schema form database client
+          try {
+            const client = getDatabaseClient(
+              SettingStore.getInstance().getSetting()
+            )
+            schema = await client.getSchema()
+            logger.debug("get schema")
+            logger.debug(JSON.stringify(schema))
+          } catch (e) {
+            logger.error("failed to get schema info")
+            if (e instanceof RequireSqlite3Error) {
+              connection.sendNotification('sqlLanguageServer.error', {
+                message: "Need to rebuild sqlite3 module."
+              })
+            }
+            throw e
           }
-          throw e
         }
       } catch (e) {
         logger.error(e)
@@ -136,7 +190,10 @@ export function createServerWithConnection(connection: Connection) {
       SettingStore.getInstance().setSettingFromWorkspaceConfig(connections)
     }
 
+    // jcc: on configuration changes
+    //      we retrieve the lint config
     const lint = change.settings?.sqlLanguageServer?.lint
+    lintConfig = lint
     if (lint?.rules) {
       documents.all().forEach(v => {
         makeDiagnostics(v)
