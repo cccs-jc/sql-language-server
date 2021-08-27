@@ -18,7 +18,7 @@ type Pos = { line: number, column: number }
 const logger = log4js.getLogger()
 
 const KEYWORD_ICON = CompletionItemKind.Event
-function keyword(name: string):CompletionItem{
+function keyword(name: string): CompletionItem {
   return { label: name, kind: KEYWORD_ICON, detail: 'keyword' }
 }
 
@@ -45,6 +45,9 @@ function extractExpectedLiterals(expected: { type: string, text: string }[]): Co
     .map(v => v.text)
     .filter((v, i, self) => self.indexOf(v) === i)
     .filter(v => {
+      // Check if parser expects us to terminate a single quote value or double quoted column name
+      // SELECT TABLE1.COLUMN1 FROM TABLE1 WHERE TABLE1.COLUMN1 = "hoge.
+      // We don't offer the ', the ", the ` as suggestions
       let undesired =
         v == '+' ||
         v == '-' ||
@@ -53,7 +56,10 @@ function extractExpectedLiterals(expected: { type: string, text: string }[]): Co
         v == ':' ||
         v == 'COUNT' ||
         v == 'AVG' ||
-        v == 'SUM'
+        v == 'SUM' ||
+        v == '`' ||
+        v == '"' ||
+        v == "'"
       return !undesired
     })
     .map(v => (keyword(v)))
@@ -102,33 +108,29 @@ function toCompletionItemFromAlias(alias: string): CompletionItem {
 }
 
 function toCompletionItemFromColumn(tableName: string, column: Column): CompletionItem {
+  const columnName = column.columnName
+  const scopedColumnName = tableName ? `${tableName}.${columnName}` : columnName
   return {
-    label: column.columnName,
+    label: columnName,
     detail: `column ${column.description}`,
     kind: CompletionItemKind.Interface,
-    data: { tableName: tableName },
+    data: { scopedColumnName: scopedColumnName },
   }
 }
-
 
 function getStartsWithTableCondidates(tablePrefix: string, tables: Table[]): CompletionItem[] {
   return tables.filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
 }
 
-function getTableAndColumnCondidates(tablePrefix: string, tables: Table[], option?: { withoutTable?: boolean, withoutColumn?: boolean }): CompletionItem[] {
-  const tableCandidates = tables.filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
-  const columnCandidates = Array.prototype.concat.apply([],
-    tables.filter(v => tableCandidates.map(v => v.label).includes(v.tableName)).map(v => v.columns)
-  ).map((v: Column) => toCompletionItemFromColumn(tablePrefix, v))
-
-  const candidates: CompletionItem[] = []
-  if (!option?.withoutTable) {
-    candidates.push(...tableCandidates)
-  }
-  if (!option?.withoutColumn) {
-    candidates.push(...columnCandidates)
-  }
-  return candidates
+function getColumnCondidates(tablePrefix: string, tables: Table[]): CompletionItem[] {
+  const tableCandidates: string[] = tables
+    .filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
+    .map(tc => tc.label)
+  const columns: Column[] = tables
+    .filter(t => tableCandidates.includes(t.tableName))
+    .map(t => t.columns)
+    .flat()
+  return columns.map(c => toCompletionItemFromColumn(tablePrefix, c))
 }
 
 function getFunctionCondidates(prefix: string, functions: DbFunction[]): CompletionItem[] {
@@ -157,7 +159,7 @@ function isCursorOnFromClause(sql: string, pos: Pos) {
   }
 }
 
-function getCandidatesForIncompleteSubquery(incompleteSubquery: IncompleteSubqueryNode, pos: Pos, schema: Schema): CompletionItem[] {
+function getCandidatedForIncompleteSubquery(incompleteSubquery: IncompleteSubqueryNode, pos: Pos, schema: Schema): CompletionItem[] {
   let candidates: CompletionItem[] = []
   const parsedFromClause = getFromNodesFromClause(incompleteSubquery.text)
   try {
@@ -238,9 +240,9 @@ function getColumnCandidates(fromNodes: FromTableNode[], tables: Table[], scoped
 }
 
 function getAliasCandidates(fromNodes: FromTableNode[], tables: Table[], partialName: string): CompletionItem[] {
-  const attachedAlias: AttachedAlias[] = tables.map(v => {
-    const as = fromNodes.filter((v2: any) => v.tableName === v2.table).map(v => v.as)
-    return { table: v, as: as ? as : [], refName: '' }
+  const attachedAlias: AttachedAlias[] = tables.map(t => {
+    const as = fromNodes.filter((v2: any) => t.tableName === v2.table).map(v => v.as)
+    return { table: t, as: as ? as : [], refName: '' }
   })
 
   let aliasArray: string[] = []
@@ -274,42 +276,31 @@ function getCandidatesForError(target: string, schema: Schema, pos: Pos, e: any,
     // 'INSERT INTO TABLE1 (C'
     // 'UPDATE TABLE1 SET C'
     case 'EXPECTED COLUMN NAME': {
-      return getTableAndColumnCondidates('', schema.tables, { withoutTable: true })
+      return getColumnCondidates('', schema.tables)
     }
   }
-  let candidates = extractExpectedLiterals(e.expected || [])
-  candidates = candidates.filter(v => {
-    // Check if parser expects us to terminate a single quote value or double quoted column name
-    // SELECT TABLE1.COLUMN1 FROM TABLE1 WHERE TABLE1.COLUMN1 = "hoge.
-    // We don't offer the ', the ", the ` as suggestions
-    let undesired =
-      v.label == '`' ||
-      v.label == '"' ||
-      v.label == "'"
-    return !undesired
-  })
-  const candidatesLiterals = candidates.map(v => v.label)
-
-  // UPDATE table_name
-  // SET column1 = value1, column2 = value2, ...
-  // WHERE condition;
-  // 'UPDATE FOO S'
-  // 'SELECT TABLE1.COLUMN1 FROM TABLE WHERE T'
-  if (candidatesLiterals.includes('.')) {
-    candidates = candidates.concat(schema.tables.map(v => toCompletionItemFromTable(v)))
-  }
-  const lastChar = target[target.length - 1]
-  logger.debug(`lastChar: ${lastChar}`)
   const removedLastDotTarget = target.slice(0, target.length - 1)
   // Do not complete column name when a cursor is on dot in from clause
   // SELECT TABLE1.COLUMN1 FROM TABLE1.
-  if (isCursorOnFromClause(removedLastDotTarget, { line: pos.line, column: pos.column - 1 })) {
+  const testPos = { line: pos.line, column: pos.column - 1 }
+  if (isCursorOnFromClause(removedLastDotTarget, testPos)) {
     return []
   }
-  const partialName = getLastTokenIncludingDot(target)
+
+  let candidates = extractExpectedLiterals(e.expected || [])
+
+  // 'UPDATE table_name
+  // SET column1 = value1, column2 = value2, ...
+  // WHERE condition;'
+  // 'UPDATE FOO S'
+  // 'SELECT TABLE1.COLUMN1 FROM TABLE WHERE T'
+  if (candidates.some(v => v.label === '.')) {
+    candidates = candidates.concat(getStartsWithTableCondidates('', schema.tables))
+  }
+
   const subqueryTables = createTablesFromFromNodes(fromNodes)
   const schemaAndSubqueries = schema.tables.concat(subqueryTables)
-
+  const partialName = getLastTokenIncludingDot(target)
   candidates = candidates.concat(getColumnCandidates(fromNodes, schemaAndSubqueries, partialName))
   candidates = candidates.concat(getFunctionCondidates(partialName, schema.functions))
   candidates = candidates.concat(getAliasCandidates(fromNodes, schemaAndSubqueries, partialName))
@@ -332,9 +323,9 @@ function getRidOfAfterCursorString(sql: string, pos: Pos) {
 
 function completeDeleteStatement(ast: DeleteStatement, pos: Pos, tables: Table[]): CompletionItem[] {
   if (isPosInLocation(ast.table.location, pos)) {
-    return getTableAndColumnCondidates('', tables, { withoutColumn: true })
+    return getStartsWithTableCondidates('', tables)
   } else if (ast.where && isPosInLocation(ast.where.expression.location, pos)) {
-    return getTableAndColumnCondidates('', tables, { withoutTable: true })
+    return getColumnCondidates('', tables)
   }
   return []
 }
@@ -345,27 +336,13 @@ function completeSelectStatement(ast: SelectStatement, _pos: Pos, _tables: Table
     const first = ast.columns[0]
     const rest = ast.columns.slice(1, ast.columns.length)
     const lastColumn = rest.reduce((p, c) => p.location.end.offset < c.location.end.offset ? c : p, first)
-    if (
-      (lastColumn.expr.type === 'column_ref' && FROM_KEYWORD.label.startsWith(lastColumn.expr.column))
-    ) {
-      throw 'column followed by F is parsed as an implicit AS so we should never get here'
-      //candidates.push(FROM_KEYWORD)
-    }
-    if (
-      (lastColumn.as && FROM_KEYWORD.label.startsWith(lastColumn.as))
-    ) {
-      candidates.push(FROM_KEYWORD)
-    }
-    if (
-      (lastColumn.expr.type === 'column_ref' && AS_KEYWORD.label.startsWith(lastColumn.expr.column))
-    ) {
-      throw 'column followed by F is parsed as an implicit AS so we should never get here'
-      //candidates.push(AS_KEYWORD)
-    }
-    if (
-      (lastColumn.as && AS_KEYWORD.label.startsWith(lastColumn.as))
-    ) {
-      candidates.push(AS_KEYWORD)
+    if (lastColumn.as) {
+      if (FROM_KEYWORD.label.startsWith(lastColumn.as)) {
+        candidates.push(FROM_KEYWORD)
+      }
+      else if (AS_KEYWORD.label.startsWith(lastColumn.as)) {
+        candidates.push(AS_KEYWORD)
+      }
     }
   }
   return candidates
@@ -450,9 +427,31 @@ function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos:
   }
 }
 
+function filterCandidatesByLastToken(target: string, candidates: CompletionItem[]): CompletionItem[] {
+  const lastToken = getLastTokenIncludingDot(target)
+  logger.debug(`lastToken: ${lastToken}`)
+  logger.debug(JSON.stringify(candidates))
+  return candidates
+    .filter(v => {
+      // Match the last token to the scoped column name (tableName/Alias)
+      // If not specified i.e.: FROM, WHERE keywords then simply use the label
+      let col = v.data?.scopedColumnName || v.label
+      return col.startsWith(lastToken)
+    })
+    .map(v => {
+      // When dealing with a scoped column (tableName/Alias)
+      // Set the insertText so that editor does not append full label
+      // but rather inserts missing suffix
+      if (v.data?.scopedColumnName.startsWith(lastToken)) {
+        v.insertText = v.data?.scopedColumnName.substr(lastToken.length)
+      }
+      return v
+    })
+}
+
 export default function complete(sql: string, pos: Pos, schema: Schema = { tables: [], functions: [] }) {
   logger.debug(`complete: ${sql}, ${JSON.stringify(pos)}`)
-  let candidates
+  let candidates: CompletionItem[] = []
   let error = null;
 
   const target = getRidOfAfterCursorString(sql, pos)
@@ -469,62 +468,16 @@ export default function complete(sql: string, pos: Pos, schema: Schema = { table
     }
     const parsedFromClause = getFromNodesFromClause(sql)
     const fromNodes = parsedFromClause?.from?.tables || []
-    const fromNodeOnCursor = getFromNodeByPos(fromNodes || [], pos)
-    if (fromNodeOnCursor && fromNodeOnCursor.type === 'incomplete_subquery') {
-      // Incomplete sub query
-      // SELECT sub FROM (SELECT e. FROM employees e) sub'
-      candidates = getCandidatesForIncompleteSubquery(fromNodeOnCursor, pos, schema)
+    const fromNodeOnCursor = getFromNodeByPos(fromNodes, pos)
+    if (fromNodeOnCursor?.type === 'incomplete_subquery') {
+      // Incomplete sub query 'SELECT sub FROM (SELECT e. FROM employees e) sub'
+      candidates = getCandidatedForIncompleteSubquery(fromNodeOnCursor, pos, schema)
     } else {
       candidates = getCandidatesForError(target, schema, pos, e, fromNodes)
     }
     error = { label: e.name, detail: e.message, line: e.line, offset: e.offset }
   }
 
-  const lastToken = getLastTokenIncludingDot(target)
-  logger.debug(`lastToken: ${lastToken}`)
-  logger.debug(JSON.stringify(candidates))
-  candidates = candidates.filter(v =>
-    v.label.startsWith(lastToken) ||
-    (v.data?.tableName + '.' + v.label).startsWith(lastToken)
-  )
-
-  candidates = candidates.map(v => {
-    if (v.data?.tableName) {
-      let fullyQualifiedField = v.data.tableName + '.' + v.label
-      if (fullyQualifiedField.startsWith(lastToken)) {
-        let columnPrefix = lastToken.substr(v.data.tableName.length + 1)
-        v.insertText = v.label.substr(columnPrefix.length)
-      }
-    }
-    return v
-  })
-
-  // candidates = []
-  // candidates.push({label: 'Text', kind: CompletionItemKind.Text})
-  // candidates.push({label: 'Method', kind: CompletionItemKind.Method})
-  // candidates.push({label: 'Function', kind: CompletionItemKind.Function})
-  // candidates.push({label: 'Constructor', kind: CompletionItemKind.Constructor})
-  // candidates.push({label: 'Field', kind: CompletionItemKind.Field})
-  // candidates.push({label: 'Variable', kind: CompletionItemKind.Variable})
-  // candidates.push({label: 'Class', kind: CompletionItemKind.Class})
-  // candidates.push({label: 'Interface', kind: CompletionItemKind.Interface})
-  // candidates.push({label: 'Module', kind: CompletionItemKind.Module})
-  // candidates.push({label: 'Property', kind: CompletionItemKind.Property})
-  // candidates.push({label: 'Unit', kind: CompletionItemKind.Unit})
-  // candidates.push({label: 'Value', kind: CompletionItemKind.Value})
-  // candidates.push({label: 'Enum', kind: CompletionItemKind.Enum})
-  // candidates.push({label: 'Keyword', kind: CompletionItemKind.Keyword})
-  // candidates.push({label: 'Snippet', kind: CompletionItemKind.Snippet})
-  // candidates.push({label: 'Color', kind: CompletionItemKind.Color})
-  // candidates.push({label: 'File', kind: CompletionItemKind.File})
-  // candidates.push({label: 'Reference', kind: CompletionItemKind.Reference})
-  // candidates.push({label: 'Folder', kind: CompletionItemKind.Folder})
-  // candidates.push({label: 'EnumMember', kind: CompletionItemKind.EnumMember})
-  // candidates.push({label: 'Constant', kind: CompletionItemKind.Constant})
-  // candidates.push({label: 'Struct', kind: CompletionItemKind.Struct})
-  // candidates.push({label: 'Event', kind: CompletionItemKind.Event})
-  // candidates.push({label: 'Operator', kind: CompletionItemKind.Operator})
-  // candidates.push({label: 'TypeParameter', kind: CompletionItemKind.TypeParameter})
-
+  candidates = filterCandidatesByLastToken(target, candidates)
   return { candidates, error }
 }
