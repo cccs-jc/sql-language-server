@@ -1,6 +1,4 @@
 
-![completion](./test.gif)
-
 
 # JupyterLab Integration
 
@@ -15,13 +13,15 @@ All that is required is for sql-language-server to be installed.
 $ npm install --save-dev sql-language-server
 ```
 
-When you create a %%sql cell
-- screen shot %%sql cell, syntax highlighing, code server initialized.
+When you create a `%%sql` cell it will trigger the initialization of the `sql-language-server`. You can verify that it starts correctly by looking at the status bar.
+
+![initialized](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/images/initialized-screenshot.png)
 
 
-## sqlite3
 
-In order to execute %%sql cells you need to install the IPython sql magic.
+# sqlite3
+
+In order to execute `%%sql` cells you need to install the IPython sql magic.
 
 ```bash
 $ pip3 install ipython-sql
@@ -52,19 +52,29 @@ Assuming you have an sqlite3 database file at `/tmp/demodb.sqlite` enter the fol
 }
 ```
 
-- completion demo video, you can now code complete and execute the SQL
+The code cell now supports syntax highlighting, code completion and execution of SQL statements.
+
+![sqlite](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/images/jupyterlab-sqlite-demo.gif)
 
 
 
+# Spark
 
-## spark
+Sql-language-server now supports a forth `adapter` named `json` which lets you provide your own schema for code completion to the sql-language-server. This is handy for scenarios like Spark where drivers are not easily integrated into a JavaScript process.
 
-### Generate Schema
+The idea is, a user triggers the genration of the schema by calling a function (work in progress). This might be a IPython magic for example
 
-- screen shot generation of schema
-link to notebook showing how to generate
+```
+%sql-language-server --generateSchema
+```
 
-- sample of schema file
+A notebook shows how to export the Spark tables into a json document containing the functions and tables available to spark sql. This code will later be bundled as a library or IPython magic.
+
+[ExportSparkSchema.ipynb](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/ExportSparkSchema.ipynb)
+
+
+This notebook generates a json file containing functions and table defenitions.
+
 ```json
   "functions": [
         {
@@ -100,13 +110,13 @@ link to notebook showing how to generate
           }
 ```
 
-- configuration
+## JupyterLab Configuration
 
 In order to code complete your SQL statement you need to configure `sql-language-server` using JupyterLab's Advanced Settings.
 
 > Advanced Settings Editor -> Language Server
 
-Assuming you have generated your schema at `/tmp/sparkdb.schema.json` enter the following configuration:
+Assuming you have generated your json schema at `/tmp/sparkdb.schema.json` enter the following configuration:
 
 ```json
 {
@@ -128,23 +138,29 @@ Assuming you have generated your schema at `/tmp/sparkdb.schema.json` enter the 
 }
 ```
 
-- install pyspark_sql magic
+In order to execute SQL statements via a cell magic like we did for sqlite3 you need to install the `pyspark_sql` magic.
+
 ```bash
 $ pip install sparksql-magic
 ```
 
-- alias %%sparksql to be %%sql
+You can then alias the `%%sparksql` to be `%%sql`.
 
-- completion demo video
-functions
-columns
-subscripts
+Code complete nested columns with subscripts.
+
+![nested](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/images/code-completion-nested.gif)
+
+Code complete spark sql functions with documentation.
+
+![functions](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/images/code-completion-functions.gif)
+
 
 
 ## Liting
 
-works same as in VSCode
+Liting work the same as in VSCode. Simply add a `lint` section to the language server advanced settings.
 
+> Advanced Settings Editor -> Language Server
 
 ```
 {
@@ -185,4 +201,6 @@ works same as in VSCode
 
 ## SQL Support in Python Strings
 
-reference other project
+This project [sql-syntax-ipython-string](https://github.com/cccs-jc/sql-syntax-ipython-string) adds syntax highlighting and code completion to SQL within a python string.
+
+![python-string-sql](https://github.com/cccs-jc/sql-language-server/blob/develop/example/jupyterlab/images/python-string-sql.png)
