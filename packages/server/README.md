@@ -113,7 +113,7 @@ $ npm run prepublish
 # launching jupyter lab
 ```
 cd ~/notebooks
-$ jupyter lab --log-level=DEBUG
+$ jupyter lab --log-level=DEBUG > jupyterlab.log 2>&1
 ```
 
 Note when you open a .sql file or a cell with `%%sql` you will see at the bottom of the JupyterLab's tray that it is starting language server. You will also notice in the terminal that a new node process is created. If you need to make changes to the code, rebuild the extension. Then you need to restart JupyterLab in order for it to launch node again and pickup the changes.
