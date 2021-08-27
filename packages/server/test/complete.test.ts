@@ -218,8 +218,8 @@ describe('ColumnName completion', () => {
     const result = complete('SELECT TABLE1.C FROM TABLE1', { line: 0, column: 15 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({ label: 'COLUMN1', insertText: 'OLUMN1' }),
-      expect.objectContaining({ label: 'COLUMN2', insertText: 'OLUMN2' }),
+      expect.objectContaining({ label: 'COLUMN1', insertText: '.COLUMN1' }),
+      expect.objectContaining({ label: 'COLUMN2', insertText: '.COLUMN2' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -390,9 +390,9 @@ describe('Nested ColumnName completion', () => {
     const result = complete('SELECT TABLE1.a FROM TABLE1', { line: 0, column: 15 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(3)
     let expected = [
-      expect.objectContaining({ label: 'abc', insertText: 'bc' }),
-      expect.objectContaining({ label: 'abc.def', insertText: 'bc.def' }),
-      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'bc.def.ghi' }),
+      expect.objectContaining({ label: 'abc', insertText: '.abc' }),
+      expect.objectContaining({ label: 'abc.def', insertText: '.abc.def' }),
+      expect.objectContaining({ label: 'abc.def.ghi', insertText: '.abc.def.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -401,8 +401,8 @@ describe('Nested ColumnName completion', () => {
     const result = complete('SELECT TABLE1.abc. FROM TABLE1', { line: 0, column: 18 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({ label: 'abc.def', insertText: 'def' }),
-      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'def.ghi' }),
+      expect.objectContaining({ label: 'def', insertText: '.def' }),
+      expect.objectContaining({ label: 'def.ghi', insertText: '.def.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -411,8 +411,8 @@ describe('Nested ColumnName completion', () => {
     const result = complete('SELECT TABLE1.abc.d FROM TABLE1', { line: 0, column: 19 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({ label: 'abc.def', insertText: 'ef' }),
-      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'ef.ghi' }),
+      expect.objectContaining({ label: 'def', insertText: '.def' }),
+      expect.objectContaining({ label: 'def.ghi', insertText: '.def.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -433,19 +433,19 @@ describe('Nested ColumnName completion', () => {
   test("complete ColumnName:cursor on first char:using alias", () => {
     const result = complete('SELECT t.abc. FROM TABLE1 as t', { line: 0, column: 13 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual('abc.def')
-    expect(result.candidates[1].label).toEqual('abc.def.ghi')
-    expect(result.candidates[0].insertText).toEqual('def')
-    expect(result.candidates[1].insertText).toEqual('def.ghi')
+    expect(result.candidates[0].label).toEqual('def')
+    expect(result.candidates[1].label).toEqual('def.ghi')
+    expect(result.candidates[0].insertText).toEqual('.def')
+    expect(result.candidates[1].insertText).toEqual('.def.ghi')
   })
 
   test("complete ColumnName:cursor on first char:using alias", () => {
     const result = complete('SELECT t.abc.de FROM TABLE1 as t', { line: 0, column: 15 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual('abc.def')
-    expect(result.candidates[1].label).toEqual('abc.def.ghi')
-    expect(result.candidates[0].insertText).toEqual('f')
-    expect(result.candidates[1].insertText).toEqual('f.ghi')
+    expect(result.candidates[0].label).toEqual('def')
+    expect(result.candidates[1].label).toEqual('def.ghi')
+    expect(result.candidates[0].insertText).toEqual('.def')
+    expect(result.candidates[1].insertText).toEqual('.def.ghi')
   })
 
   test("complete ColumnName with space:cursor on first char", () => {
@@ -453,8 +453,8 @@ describe('Nested ColumnName completion', () => {
     expect(result.candidates.length).toEqual(2)
     expect(result.candidates[0].label).toEqual('`with spaces`')
     expect(result.candidates[1].label).toEqual('`with spaces`.`sub space`')
-    expect(result.candidates[0].insertText).toEqual(' spaces`')
-    expect(result.candidates[1].insertText).toEqual(' spaces`.`sub space`')
+    expect(result.candidates[0].insertText).toEqual('.`with spaces`')
+    expect(result.candidates[1].insertText).toEqual('.`with spaces`.`sub space`')
   })
 
   test("getLastTokenIncludingDot", () => {
@@ -478,37 +478,37 @@ describe('Nested ColumnName completion', () => {
   test("with array subscripted", () => {
     const result = complete('SELECT t.abc[0]. FROM TABLE1 as t', { line: 0, column: 16 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual('abc.def')
-    expect(result.candidates[1].label).toEqual('abc.def.ghi')
-    expect(result.candidates[0].insertText).toEqual('def')
-    expect(result.candidates[1].insertText).toEqual('def.ghi')
+    expect(result.candidates[0].label).toEqual('def')
+    expect(result.candidates[1].label).toEqual('def.ghi')
+    expect(result.candidates[0].insertText).toEqual('.def')
+    expect(result.candidates[1].insertText).toEqual('.def.ghi')
   })
   
   test("with array subscripted, first char", () => {
     const result = complete('SELECT t.abc[0].d FROM TABLE1 as t', { line: 0, column: 17 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual('abc.def')
-    expect(result.candidates[1].label).toEqual('abc.def.ghi')
-    expect(result.candidates[0].insertText).toEqual('ef')
-    expect(result.candidates[1].insertText).toEqual('ef.ghi')
+    expect(result.candidates[0].label).toEqual('def')
+    expect(result.candidates[1].label).toEqual('def.ghi')
+    expect(result.candidates[0].insertText).toEqual('.def')
+    expect(result.candidates[1].insertText).toEqual('.def.ghi')
   })
 
   test("with map subscripted", () => {
     const result = complete("SELECT t.abc['key']. FROM TABLE1 as t", { line: 0, column: 20 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual("abc.def")
-    expect(result.candidates[1].label).toEqual("abc.def.ghi")
-    expect(result.candidates[0].insertText).toEqual("def")
-    expect(result.candidates[1].insertText).toEqual("def.ghi")
+    expect(result.candidates[0].label).toEqual("def")
+    expect(result.candidates[1].label).toEqual("def.ghi")
+    expect(result.candidates[0].insertText).toEqual(".def")
+    expect(result.candidates[1].insertText).toEqual(".def.ghi")
   })
   
   test("with map subscripted, first char", () => {
     const result = complete("SELECT t.abc['key'].d FROM TABLE1 as t", { line: 0, column: 21 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
-    expect(result.candidates[0].label).toEqual("abc.def")
-    expect(result.candidates[1].label).toEqual("abc.def.ghi")
-    expect(result.candidates[0].insertText).toEqual("ef")
-    expect(result.candidates[1].insertText).toEqual("ef.ghi")
+    expect(result.candidates[0].label).toEqual("def")
+    expect(result.candidates[1].label).toEqual("def.ghi")
+    expect(result.candidates[0].insertText).toEqual(".def")
+    expect(result.candidates[1].insertText).toEqual(".def.ghi")
   })
 })
 
@@ -687,7 +687,7 @@ test("conplete columns innside function", () => {
   const result = complete(sql, { line: 0, column: 24 }, COMPLEX_SCHEMA)
   expect(result.candidates.length).toEqual(1)
   expect(result.candidates[0].label).toEqual('department_id')
-  expect(result.candidates[0].insertText).toEqual('ent_id')
+  expect(result.candidates[0].insertText).toEqual('.department_id')
 })
 
 test("conplete columns innside function", () => {

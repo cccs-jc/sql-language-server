@@ -113,14 +113,29 @@ function toCompletionItemFromAlias(alias: string): CompletionItem {
   }
 }
 
-function toCompletionItemFromColumn(tableName: string, column: Column): CompletionItem {
-  const columnName = column.columnName
-  const scopedColumnName = tableName ? `${tableName}.${columnName}` : columnName
-  return {
-    label: columnName,
-    detail: `column ${column.description}`,
-    kind: CompletionItemKind.Interface,
-    data: { scopedColumnName: scopedColumnName },
+function toCompletionItemFromColumn(lastToken: string, tableName: string, column: Column): CompletionItem {
+  let columnName = column.columnName
+  if (tableName) {
+    const scopedColumnName = `${tableName}.${columnName}`
+    const matchesLastToken = scopedColumnName.startsWith(lastToken);
+    const remainingColumnName = scopedColumnName.substr(lastToken.lastIndexOf('.') + 1)
+    return {
+      label: remainingColumnName,
+      filterText: '.' + remainingColumnName,
+      insertText: '.' + remainingColumnName,
+      detail: `column ${column.description}`,
+      kind: CompletionItemKind.Interface,
+      data: { matchesLastToken: matchesLastToken },
+    }
+  }
+  else {
+    return {
+      label: columnName,
+      filterText: columnName,
+      insertText: columnName,
+      detail: `column ${column.description}`,
+      kind: CompletionItemKind.Interface,
+    }
   }
 }
 
@@ -138,7 +153,7 @@ function getColumnCondidates(tablePrefix: string, tables: Table[]): CompletionIt
   const columns: Column[] = tables
     .filter(table => tableCandidates.includes(table.tableName))
     .flatMap(table => table.columns)
-  return columns.map(c => toCompletionItemFromColumn(tablePrefix, c))
+  return columns.map(c => toCompletionItemFromColumn('', tablePrefix, c))
 }
 
 function getFunctionCondidates(prefix: string, functions: DbFunction[]): CompletionItem[] {
@@ -208,11 +223,11 @@ export function getLastTokenIncludingDot(sql: string) {
       currentToken = prevToken.replace(/\[.*?\]/, '');
     }
     return currentToken;
-   }
+  }
   return sql;
 }
 
-function getColumnCandidatesByTableScope(tables: Table[], scopedPartialColumName: string): CompletionItem[] {
+function getColumnCandidatesByTableScope(lastToken: string, tables: Table[], scopedPartialColumName: string): CompletionItem[] {
   return tables
     .filter(table => scopedPartialColumName.startsWith(table.tableName + '.'))
     .flatMap(table =>
@@ -220,10 +235,10 @@ function getColumnCandidatesByTableScope(tables: Table[], scopedPartialColumName
         return { column: col, tableName: table.tableName }
       })
     )
-    .map(colInfo => toCompletionItemFromColumn(colInfo.tableName, colInfo.column))
+    .map(colInfo => toCompletionItemFromColumn(lastToken, colInfo.tableName, colInfo.column))
 }
 
-function getColumnCandidatesByAliasScope(fromNodes: FromTableNode[], tables: Table[], scopedPartialColumName: string): CompletionItem[] {
+function getColumnCandidatesByAliasScope(lastToken: string, fromNodes: FromTableNode[], tables: Table[], scopedPartialColumName: string): CompletionItem[] {
   return tables.flatMap(table => {
     return fromNodes.filter((fromNode: any) =>
       fromNode.table === table.tableName &&
@@ -235,7 +250,7 @@ function getColumnCandidatesByAliasScope(fromNodes: FromTableNode[], tables: Tab
           return { column: col, alias: fromNode.as }
         })
       )
-      .map(colInfo => toCompletionItemFromColumn(colInfo.alias || '', colInfo.column))
+      .map(colInfo => toCompletionItemFromColumn(lastToken, colInfo.alias || '', colInfo.column))
   })
 }
 
@@ -249,7 +264,7 @@ function getAliasCandidates(fromNodes: FromTableNode[], tables: Table[], partial
   })
 }
 
-function getCandidatesForError(target: string, schema: Schema, _pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
+function getCandidatesForError(lastToken: string, schema: Schema, _pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
   switch (e.message) {
     // 'INSERT INTO TABLE1 (C'
     // 'UPDATE TABLE1 SET C'
@@ -271,10 +286,10 @@ function getCandidatesForError(target: string, schema: Schema, _pos: Pos, e: any
 
   const subqueryTables = createTablesFromFromNodes(fromNodes)
   const schemaAndSubqueries = schema.tables.concat(subqueryTables)
-  const partialName = getLastTokenIncludingDot(target)
+  const partialName = lastToken
   candidates = candidates.concat(
-    getColumnCandidatesByTableScope(schemaAndSubqueries, partialName),
-    getColumnCandidatesByAliasScope(fromNodes, schemaAndSubqueries, partialName),
+    getColumnCandidatesByTableScope(lastToken, schemaAndSubqueries, partialName),
+    getColumnCandidatesByAliasScope(lastToken, fromNodes, schemaAndSubqueries, partialName),
     getFunctionCondidates(partialName, schema.functions),
     getAliasCandidates(fromNodes, schemaAndSubqueries, partialName)
   )
@@ -361,7 +376,7 @@ function getJoinCondidates(ast: any, schema: Schema, pos: Pos): CompletionItem[]
   return []
 }
 
-function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos: Pos): CompletionItem[] {
+function getCandidatesForParsedQuery(lastToken: string, sql: string, ast: any, schema: Schema, pos: Pos): CompletionItem[] {
   logger.debug(`getting candidates for parse query ast: ${JSON.stringify(ast)}`)
   if (ast.type === 'delete') {
     return completeDeleteStatement(ast, pos, schema.tables)
@@ -391,8 +406,8 @@ function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos:
         let scopedPartialColumnName = tableOrAlias + '.' + partialColumnName
         // Find the corresponding table and suggest it's columns
         candidates = candidates.concat(
-          getColumnCandidatesByTableScope(schemaAndSubqueries, scopedPartialColumnName),
-          getColumnCandidatesByAliasScope(fromNodes, schemaAndSubqueries, scopedPartialColumnName))
+          getColumnCandidatesByTableScope(lastToken, schemaAndSubqueries, scopedPartialColumnName),
+          getColumnCandidatesByAliasScope(lastToken, fromNodes, schemaAndSubqueries, scopedPartialColumnName))
       }
       else {
         // Column is not scoped to a table/alias yet
@@ -409,48 +424,12 @@ function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos:
   }
 }
 
-function filterCandidatesByLastToken(target: string, candidates: CompletionItem[], _pos: Pos): CompletionItem[] {
-  const lastToken = getLastTokenIncludingDot(target)
+function filterCandidatesByLastToken(lastToken: string, candidates: CompletionItem[], _pos: Pos): CompletionItem[] {
   logger.debug(`filter based on lastToken: ${lastToken}`)
   logger.debug(`candidates are: ${JSON.stringify(candidates)}`)
   return candidates
     .filter(v => {
-      // Match the last token to the scoped column name (tableName/Alias)
-      // If not specified i.e.: FROM, WHERE keywords then simply use the label
-      const col = v.data?.scopedColumnName || v.label
-      // cccs-jc: Jupyterlab does not seem to look at textEdit.... maybe in future?
-      // const dot = lastToken.lastIndexOf('.');
-      // if (dot > 0) {
-      //   const lastTokenBacktik = lastToken.substr(0, dot) + '.`' + lastToken.substr(dot + 1)
-      //   if (col.startsWith(lastTokenBacktik)) {
-      //     return true;
-      //   }
-      // }
-
-      return col.startsWith(lastToken)
-    })
-    .map(v => {
-      // When dealing with a scoped column (tableName/Alias)
-      // Set the insertText so that editor does not append full label
-      // but rather inserts missing suffix
-      // const dot = lastToken.lastIndexOf('.');
-      // if (dot > 0) {
-      //   const lastTokenBacktik = lastToken.substr(0, dot) + '.`' + lastToken.substr(dot + 1)
-      //   if (v.data?.scopedColumnName?.startsWith(lastTokenBacktik)) {
-      //     const vsPos = Position.create(pos.line, pos.column)
-      //     // cccs-jc: Jupyterlab does not seem to look at textEdit.... maybe in future?
-      //     v.textEdit = InsertReplaceEdit.create('bar',
-      //       Range.create(vsPos, vsPos),
-      //       Range.create(Position.create(vsPos.line, vsPos.character - 1), Position.create(vsPos.line, vsPos.character + 1))
-      //     );
-      //   }
-      // }
-      // if (!v.textEdit){
-      if (v.data?.scopedColumnName?.startsWith(lastToken)) {
-        v.insertText = v.data?.scopedColumnName.substr(lastToken.length)
-      }
-      // }
-      return v
+      return v.label.startsWith(lastToken) || v.data?.matchesLastToken
     })
 }
 
@@ -460,10 +439,11 @@ export function complete(sql: string, pos: Pos, schema: Schema = { tables: [], f
   let error = null;
 
   const target = getRidOfAfterCursorString(sql, pos)
+  const lastToken = getLastTokenIncludingDot(target)
   logger.debug(`target: ${target}`)
   try {
     const ast = parse(target);
-    candidates = getCandidatesForParsedQuery(sql, ast, schema, pos)
+    candidates = getCandidatesForParsedQuery(lastToken, sql, ast, schema, pos)
   }
   catch (e) {
     logger.debug(`error: ${e}`)
@@ -477,11 +457,11 @@ export function complete(sql: string, pos: Pos, schema: Schema = { tables: [], f
       // Incomplete sub query 'SELECT sub FROM (SELECT e. FROM employees e) sub'
       candidates = getCandidatedForIncompleteSubquery(fromNodeOnCursor, pos, schema)
     } else {
-      candidates = getCandidatesForError(target, schema, pos, e, fromNodes)
+      candidates = getCandidatesForError(lastToken, schema, pos, e, fromNodes)
     }
     error = { label: e.name, detail: e.message, line: e.line, offset: e.offset }
   }
 
-  candidates = filterCandidatesByLastToken(target, candidates, pos)
+  candidates = filterCandidatesByLastToken(lastToken, candidates, pos)
   return { candidates, error }
 }
