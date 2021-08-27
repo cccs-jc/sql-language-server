@@ -1,4 +1,49 @@
 
+## Language Server
+
+Language Server is a special kind of Visual Studio Code extension that powers the editing experience for many programming languages. With Language Servers, you can implement autocomplete, error-checking (diagnostics), jump-to-definition, and many other language features supported in VS Code.
+
+More details found here https://code.visualstudio.com/api/language-extensions/language-server-extension-guide
+
+JupyterLab leverages the VSCode Language Server extentions via this jupyterlab extension
+https://github.com/krassowski/jupyterlab-lsp
+
+Naturally `jupyterlab-lsp` supports the python language server.
+
+This page shows the supported language servers
+https://jupyterlab-lsp.readthedocs.io/en/latest/Language%20Servers.html
+
+One of these is the `sql-language-srver`
+https://github.com/joe-re/sql-language-server
+
+The `sql-language-server` is able to syntax-highlight, lint and code-complete keywords.
+
+Given a database schema it can also auto-complete column and table names. However it can only extract schema from the following database engines. It supports the following `adapter` configuration.
+
+- MySQL
+- PostgreSQL
+- SQLite3
+
+
+We have extended `sql-language-server` to support
+
+- Added new `adapter` configuration option named `json`. Which allows for loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads.
+- Small fixes to allow configuration via the JupyterLab advanced settings
+- Nested columns names using multi-part dot seperated paths
+- Support for spaces in nested columns names (backtiks each segment)
+- Visually distinct icons for `table`, `column`, `alias`, `functions` suggestions
+- Added support for code-completion of
+	- Functions including descriptions
+	- Table alias
+	- Table alias followed by dot
+	- Partially typed columns including multi-part fields (needed insertText)
+    - Map and Array subscripts `map_col['key'].<tab>`, `array_col[0].<tab>`
+
+
+- no support for fully qualified table names `databaseName.schemaName.tableName` (might be something we want to support)
+
+
+
 
 # JupyterLab Integration
 
