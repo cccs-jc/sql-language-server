@@ -124,7 +124,7 @@ const SIMPLE_SCHEMA = {
 describe('on blank space', () => {
   test("complete ", () => {
     const result = complete('', { line: 0, column: 0 }, SIMPLE_SCHEMA)
-    expect(result.candidates.length).toEqual(8)
+    expect(result.candidates.length).toEqual(13)
     let expected = [
       expect.objectContaining({ label: 'SELECT' }),
       expect.objectContaining({ label: 'WHERE' }),
@@ -140,9 +140,9 @@ describe('on blank space', () => {
 
   test("complete inside SELECT", () => {
     const result = complete('SELECT ', { line: 0, column: 7 }, SIMPLE_SCHEMA)
-    expect(result.candidates.length).toEqual(13) // TODO whare are they?
-    expect(result.candidates[11].label).toEqual('array_concat()')
-    expect(result.candidates[12].label).toEqual('array_contains()')
+    expect(result.candidates.length).toEqual(24) // TODO whare are they?
+    expect(result.candidates[22].label).toEqual('array_concat()')
+    expect(result.candidates[23].label).toEqual('array_contains()')
   })
 })
 
@@ -325,7 +325,7 @@ describe('cursor on dot', () => {
 
   test("not complete when ", () => {
     const result = complete('SELECT    FROM TABLE1', { line: 0, column: 8 }, SIMPLE_SCHEMA)
-    expect(result.candidates.length).toEqual(13) // TODO what are they?
+    expect(result.candidates.length).toEqual(24) // TODO what are they?
   })
 })
 

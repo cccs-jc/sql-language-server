@@ -22,16 +22,12 @@ import { RequireSqlite3Error } from './database_libs/Sqlite3Client'
 import * as fs from 'fs'
 //import { NONAME } from 'dns'
 import { RawConfig } from 'sqlint'
+//import { setFlagsFromString } from 'v8'
 
 
 export type ConnectionMethod = 'node-ipc' | 'stdio'
 type Args = {
   method?: ConnectionMethod
-}
-
-// jcc to read schema file
-function readFile(filePath: string) {
-  return fs.readFileSync(filePath, "utf8").replace(/^\ufeff/u, "");
 }
 
 
@@ -44,6 +40,30 @@ export function createServerWithConnection(connection: Connection) {
   let hasConfigurationCapability = false
   let rootPath = ''
   let lintConfig: RawConfig | null | undefined
+
+  // jcc to read schema file
+  function readJsonSchemaFile(filePath: string) {
+    logger.info(`loading schema file: ${filePath}`)
+    const data = fs.readFileSync(filePath, "utf8").replace(/^\ufeff/u, "");
+    try {
+      schema = JSON.parse(data);
+    }
+    catch (e) {
+      logger.error("failed to read schema file")
+      connection.sendNotification('sqlLanguageServer.error', {
+        message: "Failed to read schema file: " + filePath + " error: " + e.message
+      })
+      throw e
+    }
+  }
+
+  function readAndMonitorJsonSchemaFile(filePath: string) {
+    readJsonSchemaFile(filePath)
+    fs.watchFile(filePath, (_curr, _prev) => {
+      logger.info(`change detected, reloading schema file: ${filePath}`)
+      readJsonSchemaFile(filePath)
+    })
+  }
 
   async function makeDiagnostics(document: TextDocument) {
 
@@ -130,17 +150,7 @@ export function createServerWithConnection(connection: Connection) {
             })
             throw "filename must be provided"
           }
-
-          try {
-            schema = JSON.parse(readFile(path));
-          }
-          catch (e) {
-            logger.error("failed to read schema file")
-            connection.sendNotification('sqlLanguageServer.error', {
-              message: "Failed to read schema file: " + path + " error: " + e.message
-            })
-            throw e
-          }
+          readAndMonitorJsonSchemaFile(path)
         }
         else {
           // jcc: else get schema form database client
@@ -210,7 +220,7 @@ export function createServerWithConnection(connection: Connection) {
     logger.debug(text || '')
     let pos = { line: docParams.position.line, column: docParams.position.character }
     const candidates = complete(text, pos, schema).candidates
-    logger.debug(candidates.map(v => v.insertText || v.label).join(","))
+    logger.debug('onCompletion returns: ' + candidates.map(v => v.insertText || v.label).join(","))
     return candidates
   })
 

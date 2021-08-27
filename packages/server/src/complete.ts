@@ -31,42 +31,48 @@ const ON_KEYWORD = keyword('ON')
 
 const CLAUSES: CompletionItem[] = [
   keyword('SELECT'),
+  keyword('select'),
   keyword('WHERE'),
+  keyword('where'),
   keyword('ORDER BY'),
+  keyword('order by'),
   keyword('GROUP BY'),
+  keyword('group by'),
   keyword('LIMIT'),
+  keyword('limit'),
   keyword('--'),
   keyword('/*'),
   keyword('(')
 ]
 
+const UNDESIRED_LITERAL = [
+  '+',
+  '-',
+  '*',
+  '$',
+  ':',
+  'COUNT',
+  'AVG',
+  'SUM',
+  '`',
+  '"',
+  "'",
+]
+
+// Check if parser expects us to terminate a single quote value or double quoted column name
+// SELECT TABLE1.COLUMN1 FROM TABLE1 WHERE TABLE1.COLUMN1 = "hoge.
+// We don't offer the ', the ", the ` as suggestions
 function extractExpectedLiterals(expected: { type: string, text: string }[]): CompletionItem[] {
-  return expected.filter(v => v.type === 'literal')
-    .map(v => v.text)
-    .filter((v, i, self) => self.indexOf(v) === i)
-    .filter(v => {
-      // Check if parser expects us to terminate a single quote value or double quoted column name
-      // SELECT TABLE1.COLUMN1 FROM TABLE1 WHERE TABLE1.COLUMN1 = "hoge.
-      // We don't offer the ', the ", the ` as suggestions
-      let undesired =
-        v == '+' ||
-        v == '-' ||
-        v == '*' ||
-        v == '$' ||
-        v == ':' ||
-        v == 'COUNT' ||
-        v == 'AVG' ||
-        v == 'SUM' ||
-        v == '`' ||
-        v == '"' ||
-        v == "'"
-      return !undesired
-    })
-    .map(v => (keyword(v)))
+  const literals = expected.filter(v => v.type === 'literal').map(v => v.text)
+  const uniqueLiterals = [...new Set(literals)];
+  return uniqueLiterals
+    .filter(v => !UNDESIRED_LITERAL.includes(v))
+    .map(v => v == 'ORDER' ? 'ORDER BY' : v)
+    .map(v => v == 'GROUP' ? 'GROUP BY' : v)
+    .flatMap(v => [keyword(v.toLocaleLowerCase()), keyword(v),])
 }
 
-
-function getColumnRefByPos(columns: ColumnRefNode[], pos: { line: number, column: number }) {
+function getColumnRefByPos(columns: ColumnRefNode[], pos: Pos) {
   return columns.find(v =>
     (v.location.start.line === pos.line + 1 && v.location.start.column <= pos.column) &&
     (v.location.end.line === pos.line + 1 && v.location.end.column >= pos.column)
@@ -78,7 +84,7 @@ function isPosInLocation(location: NodeRange, pos: Pos) {
     (location.end.line === pos.line + 1 && location.end.column >= pos.column)
 }
 
-function getFromNodeByPos(fromNodes: FromTableNode[], pos: { line: number, column: number }) {
+function getFromNodeByPos(fromNodes: FromTableNode[], pos: Pos) {
   return fromNodes.find(v => isPosInLocation(v.location, pos))
 }
 
@@ -119,35 +125,42 @@ function toCompletionItemFromColumn(tableName: string, column: Column): Completi
 }
 
 function getStartsWithTableCondidates(tablePrefix: string, tables: Table[]): CompletionItem[] {
-  return tables.filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
+  return tables
+    .filter(table => table.tableName.startsWith(tablePrefix))
+    .map(table => toCompletionItemFromTable(table))
 }
 
 function getColumnCondidates(tablePrefix: string, tables: Table[]): CompletionItem[] {
   const tableCandidates: string[] = tables
-    .filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
-    .map(tc => tc.label)
+    .filter(table => table.tableName.startsWith(tablePrefix))
+    .map(table => toCompletionItemFromTable(table))
+    .map(tableCandidate => tableCandidate.label)
   const columns: Column[] = tables
-    .filter(t => tableCandidates.includes(t.tableName))
-    .map(t => t.columns)
-    .flat()
+    .filter(table => tableCandidates.includes(table.tableName))
+    .flatMap(table => table.columns)
   return columns.map(c => toCompletionItemFromColumn(tablePrefix, c))
 }
 
 function getFunctionCondidates(prefix: string, functions: DbFunction[]): CompletionItem[] {
-  let f = functions
-  // If user typed the start of the function
-  if (prefix.length > 0) {
-    let lower = prefix.toLowerCase()
-    f = f.filter(v => v.name.startsWith(lower))
-    // If typed string is in upper case, then return upper case suggestions
-    if (prefix != lower) {
-      f = f.map(v => {
-        return { name: v.name.toUpperCase(), description: v.description }
+  if (!prefix) {
+    // Nothing was typed, return all lowercase functions
+    return functions.map(v => toCompletionItemFromFunction(v))
+  }
+  else {
+    // If user typed the start of the function
+    const lower = prefix.toLowerCase()
+    const isTypedUpper = (prefix != lower)
+    return functions
+      // Search using lowercase prefix
+      .filter(v => v.name.startsWith(lower))
+      // If typed string is in upper case, then return upper case suggestions
+      .map(v => {
+        if (isTypedUpper) v.name = v.name.toUpperCase()
+        return v
       })
-    }
+      .map(v => toCompletionItemFromFunction(v))
   }
 
-  return f.map(v => toCompletionItemFromFunction(v))
 }
 
 function isCursorOnFromClause(sql: string, pos: Pos) {
@@ -200,75 +213,41 @@ function getLastTokenIncludingDot(sql: string) {
   return match[1]
 }
 
-type AttachedAlias = {
-  table: Table
-  as: (string | null)[],
-  refName: string,
+function getColumnCandidatesByTableScope(tables: Table[], scopedPartialColumName: string): CompletionItem[] {
+  return tables
+    .filter(table => scopedPartialColumName.startsWith(table.tableName + '.'))
+    .flatMap(table =>
+      table.columns.map(col => {
+        return { column: col, tableName: table.tableName }
+      })
+    )
+    .map(colInfo => toCompletionItemFromColumn(colInfo.tableName, colInfo.column))
 }
 
-function getColumnCandidates(fromNodes: FromTableNode[], tables: Table[], scopedPartialColumName: string): CompletionItem[] {
-  const attachedAlias: AttachedAlias[] = tables.map(v => {
-    const as = fromNodes.filter((v2: any) => v.tableName === v2.table).map(v => v.as)
-    return { table: v, as: as ? as : [], refName: '' }
+function getColumnCandidatesByAliasScope(fromNodes: FromTableNode[], tables: Table[], scopedPartialColumName: string): CompletionItem[] {
+  return tables.flatMap(table => {
+    return fromNodes.filter((fromNode: any) =>
+      fromNode.table === table.tableName &&
+      fromNode.as &&
+      scopedPartialColumName.startsWith(fromNode.as + '.')
+    )
+      .flatMap(fromNode =>
+        table.columns.map(col => {
+          return { column: col, alias: fromNode.as }
+        })
+      )
+      .map(colInfo => toCompletionItemFromColumn(colInfo.alias || '', colInfo.column))
   })
-
-  let table: AttachedAlias | undefined
-  for (let idx = 0; table == undefined && idx < attachedAlias.length; idx++) {
-    let aAlias = attachedAlias[idx]
-    if (scopedPartialColumName.startsWith(aAlias.table.tableName + '.')) {
-      table = Object.assign({}, aAlias, { refName: aAlias.table.tableName })
-      break
-    }
-    else {
-      for (let asIdx = 0; asIdx < aAlias.as.length; asIdx++) {
-        let as: string | null = aAlias.as[asIdx]
-        if (as) {
-          if (scopedPartialColumName.startsWith(as + '.')) {
-            table = Object.assign({}, aAlias, { refName: as })
-            break
-          }
-        }
-      }
-    }
-  }
-
-  if (table) {
-    let refName = table.refName
-    return table.table.columns.map(v => toCompletionItemFromColumn(refName, v))
-  }
-  return []
 }
 
 function getAliasCandidates(fromNodes: FromTableNode[], tables: Table[], partialName: string): CompletionItem[] {
-  const attachedAlias: AttachedAlias[] = tables.map(t => {
-    const as = fromNodes.filter((v2: any) => t.tableName === v2.table).map(v => v.as)
-    return { table: t, as: as ? as : [], refName: '' }
+  return tables.flatMap(table => {
+    return fromNodes.filter((fromNode: any) =>
+      fromNode.as &&
+      fromNode.as.startsWith(partialName) &&
+      fromNode.table === table.tableName)
+      .map(fromNode => toCompletionItemFromAlias(fromNode.as || ''))
   })
-
-  let aliasArray: string[] = []
-  for (let idx = 0; idx < attachedAlias.length; idx++) {
-    let aAlias = attachedAlias[idx]
-    // if (aAlias.table.tableName.startsWith(partialName)) {
-    //   //aliasArray.push(aAlias.table.tableName)
-    // }
-    // else
-    {
-      for (let asIdx = 0; asIdx < aAlias.as.length; asIdx++) {
-        let as: string | null = aAlias.as[asIdx]
-        if (as) {
-          if (as.startsWith(partialName)) {
-            aliasArray.push(as)
-          }
-        }
-      }
-    }
-  }
-
-  if (aliasArray.length > 0) {
-    return aliasArray.map(v => toCompletionItemFromAlias(v))
-  }
-
-  return []
 }
 
 function getCandidatesForError(target: string, schema: Schema, pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
@@ -301,10 +280,13 @@ function getCandidatesForError(target: string, schema: Schema, pos: Pos, e: any,
   const subqueryTables = createTablesFromFromNodes(fromNodes)
   const schemaAndSubqueries = schema.tables.concat(subqueryTables)
   const partialName = getLastTokenIncludingDot(target)
-  candidates = candidates.concat(getColumnCandidates(fromNodes, schemaAndSubqueries, partialName))
-  candidates = candidates.concat(getFunctionCondidates(partialName, schema.functions))
-  candidates = candidates.concat(getAliasCandidates(fromNodes, schemaAndSubqueries, partialName))
-
+  candidates = candidates.concat(
+    getColumnCandidatesByTableScope(schemaAndSubqueries, partialName),
+    getColumnCandidatesByAliasScope(fromNodes, schemaAndSubqueries, partialName),
+    getFunctionCondidates(partialName, schema.functions),
+    getAliasCandidates(fromNodes, schemaAndSubqueries, partialName)
+  )
+  logger.debug(`candidates from error returns: ${JSON.stringify(candidates)}`)
   return candidates
 }
 
@@ -318,13 +300,18 @@ function getFromNodesFromClause(sql: string): FromClauseParserResult | null {
 }
 
 function getRidOfAfterCursorString(sql: string, pos: Pos) {
-  return sql.split('\n').filter((_v, idx) => pos.line >= idx).map((v, idx) => idx === pos.line ? v.slice(0, pos.column) : v).join('\n')
+  return sql
+    .split('\n')
+    .filter((_v, idx) => pos.line >= idx)
+    .map((v, idx) => idx === pos.line ? v.slice(0, pos.column) : v)
+    .join('\n')
 }
 
 function completeDeleteStatement(ast: DeleteStatement, pos: Pos, tables: Table[]): CompletionItem[] {
   if (isPosInLocation(ast.table.location, pos)) {
     return getStartsWithTableCondidates('', tables)
-  } else if (ast.where && isPosInLocation(ast.where.expression.location, pos)) {
+  }
+  else if (ast.where && isPosInLocation(ast.where.expression.location, pos)) {
     return getColumnCondidates('', tables)
   }
   return []
@@ -352,7 +339,7 @@ function getColumnAtPosition(ast: any, pos: Pos): ColumnRefNode | undefined {
   const columns = ast.columns
   if (Array.isArray(columns)) {
     // columns in select clause
-    const columnRefs = (columns as any).map((v: any) => v.expr).filter((v: any) => !!v)
+    const columnRefs = (columns as any).map((col: any) => col.expr).filter((expr: any) => !!expr)
     if (ast.type === 'select' && ast.where?.expression) {
       // columns in where clause  
       columnRefs.push(ast.where.expression)
@@ -371,8 +358,7 @@ function getJoinCondidates(ast: any, schema: Schema, pos: Pos): CompletionItem[]
     const fromTable = getFromNodeByPos(ast.from?.tables || [], pos)
     if (fromTable && fromTable.type === 'table') {
       const candidates = schema.tables.map(v => toCompletionItemFromTable(v))
-      candidates.push(INNERJOIN_KEYWORD)
-      candidates.push(LEFTJOIN_KEYWORD)
+      candidates.push(INNERJOIN_KEYWORD, LEFTJOIN_KEYWORD)
       // = candidates.concat([{ label: 'INNER JOIN' }, { label: 'LEFT JOIN' }])
       if (fromTable.join && !fromTable.on) {
         candidates.push(ON_KEYWORD)
@@ -384,7 +370,7 @@ function getJoinCondidates(ast: any, schema: Schema, pos: Pos): CompletionItem[]
 }
 
 function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos: Pos): CompletionItem[] {
-  logger.debug(`ast: ${JSON.stringify(ast)}`)
+  logger.debug(`getting candidates for parse query ast: ${JSON.stringify(ast)}`)
   if (ast.type === 'delete') {
     return completeDeleteStatement(ast, pos, schema.tables)
   }
@@ -397,45 +383,49 @@ function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos:
       }
     }
     const columnRef = getColumnAtPosition(ast, pos)
-    if (columnRef) {
+    if (!columnRef) {
+      candidates = candidates.concat(getJoinCondidates(ast, schema, pos))
+    }
+    else {
       const parsedFromClause = getFromNodesFromClause(sql)
       const fromNodes = parsedFromClause?.from?.tables || []
       const subqueryTables = createTablesFromFromNodes(fromNodes)
       const schemaAndSubqueries = schema.tables.concat(subqueryTables)
 
-      const tableOrAlias = columnRef.table
-      if (tableOrAlias?.length > 0) {
+      if (columnRef.table) {
         // We know what table/alias this column belongs to
         const partialColumnName = columnRef.column
+        const tableOrAlias = columnRef.table
         let scopedPartialColumnName = tableOrAlias + '.' + partialColumnName
         // Find the corresponding table and suggest it's columns
-        candidates = candidates.concat(getColumnCandidates(fromNodes, schemaAndSubqueries, scopedPartialColumnName))
+        candidates = candidates.concat(
+          getColumnCandidatesByTableScope(schemaAndSubqueries, scopedPartialColumnName),
+          getColumnCandidatesByAliasScope(fromNodes, schemaAndSubqueries, scopedPartialColumnName))
       }
       else {
         // Column is not scoped to a table/alias yet
         const partialName = columnRef.column
         // Could be an alias, a talbe or a function
-        candidates = candidates.concat(getAliasCandidates(fromNodes, schemaAndSubqueries, partialName))
-        candidates = candidates.concat(getStartsWithTableCondidates(partialName, schema.tables))
-        candidates = candidates.concat(getFunctionCondidates(partialName, schema.functions))
+        candidates = candidates.concat(
+          getAliasCandidates(fromNodes, schemaAndSubqueries, partialName),
+          getStartsWithTableCondidates(partialName, schema.tables),
+          getFunctionCondidates(partialName, schema.functions))
       }
     }
-    else {
-      candidates = candidates.concat(getJoinCondidates(ast, schema, pos))
-    }
+    logger.debug(`parse query returns: ${JSON.stringify(candidates)}`)
     return candidates
   }
 }
 
 function filterCandidatesByLastToken(target: string, candidates: CompletionItem[]): CompletionItem[] {
   const lastToken = getLastTokenIncludingDot(target)
-  logger.debug(`lastToken: ${lastToken}`)
-  logger.debug(JSON.stringify(candidates))
+  logger.debug(`filter based on lastToken: ${lastToken}`)
+  logger.debug(`candidates are: ${JSON.stringify(candidates)}`)
   return candidates
     .filter(v => {
       // Match the last token to the scoped column name (tableName/Alias)
       // If not specified i.e.: FROM, WHERE keywords then simply use the label
-      let col = v.data?.scopedColumnName || v.label
+      const col = v.data?.scopedColumnName || v.label
       return col.startsWith(lastToken)
     })
     .map(v => {
@@ -450,7 +440,7 @@ function filterCandidatesByLastToken(target: string, candidates: CompletionItem[
 }
 
 export default function complete(sql: string, pos: Pos, schema: Schema = { tables: [], functions: [] }) {
-  logger.debug(`complete: ${sql}, ${JSON.stringify(pos)}`)
+  logger.debug(`start complete: ${sql}, ${JSON.stringify(pos)}`)
   let candidates: CompletionItem[] = []
   let error = null;
 
@@ -461,8 +451,7 @@ export default function complete(sql: string, pos: Pos, schema: Schema = { table
     candidates = getCandidatesForParsedQuery(sql, ast, schema, pos)
   }
   catch (e) {
-    logger.debug('error')
-    logger.debug(e)
+    logger.debug(`error: ${e}`)
     if (e.name !== 'SyntaxError') {
       throw e
     }
