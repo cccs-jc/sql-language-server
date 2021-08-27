@@ -15,12 +15,28 @@ describe('keyword completion', () => {
     })
 
     test("complete FROM word with norm columns", () => {
-      const sql = 'SELECT d, f F'
-      const result = complete('SELECT d, f F', { line: 0, column: sql.length })
+      const result = complete('SELECT d, f F', { line: 0, column: 13 })
       expect(result.candidates.length).toEqual(1)
       expect(result.candidates[0].label).toEqual('FROM')
     })
+
+    test("complete FROM word with norm columns", () => {
+      const result = complete('SELECT d, f AS F', { line: 0, column: 16 })
+      // TODO: this is not correct but difficult to fix...
+      expect(result.candidates.length).toEqual(1)
+      expect(result.candidates[0].label).toEqual('FROM')
+    })
+    test("complete FROM word with norm columns", () => {
+      const result = complete('SELECT d, f AS aa F', { line: 0, column: 19 })
+      expect(result.candidates.length).toEqual(1)
+      expect(result.candidates[0].label).toEqual('FROM')
+    })
+  test("complete FROM word with norm columns", () => {
+    const result = complete('SELECT d, f A', { line: 0, column: 13 })
+    expect(result.candidates.length).toEqual(1)
+    expect(result.candidates[0].label).toEqual('AS')
   })
+})
 
   test("complete 'WHERE' keyword", () => {
     const result = complete('SELECT * FROM FOO W', { line: 0, column: 19 })
@@ -477,6 +493,7 @@ const COMPLEX_SCHEMA = {
   ],
   functions: []
 }
+
 
 test("conplete columns from alias that start chars same as other table", () => {
   const sql = `

@@ -254,10 +254,6 @@ export function createServerWithConnection(connection: Connection) {
   })
 
   connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
-
-    //item.detail = 'TypeScript details';
-    if (item.label == 'abs()') {
-    }
     return item
   })
 
