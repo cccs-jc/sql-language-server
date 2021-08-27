@@ -1,5 +1,5 @@
 
-![completion](./Screen-Recording-2021-08-23-at-4.34.20-PM.gif)
+![completion](./test.gif)
 
 
 # JupyterLab Integration
