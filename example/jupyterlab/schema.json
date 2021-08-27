@@ -1496,8 +1496,14 @@
                 "type": "long"
               },
               {
-                "columnName": "map_col.key.key.end",
+                "columnName": "map_col.key.key.start",
                 "description": "long",
+                "metadata": {},
+                "type": "long"
+              },
+              {
+                "columnName": "`spa ces`.`sp aces`",
+                "description": "with spaces",
                 "metadata": {},
                 "type": "long"
               }

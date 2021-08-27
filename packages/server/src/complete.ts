@@ -401,7 +401,7 @@ function getCandidatesForParsedQuery(sql: string, ast: any, schema: Schema, pos:
   }
 }
 
-function filterCandidatesByLastToken(target: string, candidates: CompletionItem[]): CompletionItem[] {
+function filterCandidatesByLastToken(target: string, candidates: CompletionItem[], _pos: Pos): CompletionItem[] {
   const lastToken = getLastTokenIncludingDot(target)
   logger.debug(`filter based on lastToken: ${lastToken}`)
   logger.debug(`candidates are: ${JSON.stringify(candidates)}`)
@@ -410,15 +410,37 @@ function filterCandidatesByLastToken(target: string, candidates: CompletionItem[
       // Match the last token to the scoped column name (tableName/Alias)
       // If not specified i.e.: FROM, WHERE keywords then simply use the label
       const col = v.data?.scopedColumnName || v.label
+      // cccs-jc: Jupyterlab does not seem to look at textEdit.... maybe in future?
+      // const dot = lastToken.lastIndexOf('.');
+      // if (dot > 0) {
+      //   const lastTokenBacktik = lastToken.substr(0, dot) + '.`' + lastToken.substr(dot + 1)
+      //   if (col.startsWith(lastTokenBacktik)) {
+      //     return true;
+      //   }
+      // }
       return col.startsWith(lastToken)
     })
     .map(v => {
       // When dealing with a scoped column (tableName/Alias)
       // Set the insertText so that editor does not append full label
       // but rather inserts missing suffix
-      if (v.data?.scopedColumnName.startsWith(lastToken)) {
+      // const dot = lastToken.lastIndexOf('.');
+      // if (dot > 0) {
+      //   const lastTokenBacktik = lastToken.substr(0, dot) + '.`' + lastToken.substr(dot + 1)
+      //   if (v.data?.scopedColumnName?.startsWith(lastTokenBacktik)) {
+      //     const vsPos = Position.create(pos.line, pos.column)
+      //     // cccs-jc: Jupyterlab does not seem to look at textEdit.... maybe in future?
+      //     v.textEdit = InsertReplaceEdit.create('bar',
+      //       Range.create(vsPos, vsPos),
+      //       Range.create(Position.create(vsPos.line, vsPos.character - 1), Position.create(vsPos.line, vsPos.character + 1))
+      //     );
+      //   }
+      // }
+      // if (!v.textEdit){
+      if (v.data?.scopedColumnName?.startsWith(lastToken)) {
         v.insertText = v.data?.scopedColumnName.substr(lastToken.length)
       }
+      // }
       return v
     })
 }
@@ -451,6 +473,6 @@ export default function complete(sql: string, pos: Pos, schema: Schema = { table
     error = { label: e.name, detail: e.message, line: e.line, offset: e.offset }
   }
 
-  candidates = filterCandidatesByLastToken(target, candidates)
+  candidates = filterCandidatesByLastToken(target, candidates, pos)
   return { candidates, error }
 }

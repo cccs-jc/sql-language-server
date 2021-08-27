@@ -24,7 +24,7 @@ https://github.com/joe-re/sql-language-server
 
 The `sql-language-server` is able to syntax-highlith, lint and code-complete keywords.
 
-Given a database schema it can also auto-complete column and table names. However it can only extract schema from the following database engines.
+Given a database schema it can also auto-complete column and table names. However it can only extract schema from the following database engines. It supports the following `adapter` configuration.
 
 - MySQL
 - PostgreSQL
@@ -33,17 +33,18 @@ Given a database schema it can also auto-complete column and table names. Howeve
 
 We have extended `sql-language-server` to support
 
-- configuration via the JupyterLab advanced settings
-- loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads.
-- nested columns names using multi-part dot seperated paths
-- visually distinct icons for `table`, `column`, `alias`, `functions` suggestions
-- added support for code-completion of
-	- functions including descriptions
-	- table alias
-	- table alias followed by dot
-	- partially typed columns including multi-part fields (needed insertText)
+- Added new `adapter` configuration option named `json`. Which allows for loading schema and function information from json file, rather than having the `sql-language-server` connect to spark to retrieve the information, the idea is to use pyspark from the notebook, produce a json configuration file which the `sql-language-server` monitors for changes and loads.
+- Small fixes to allow configuration via the JupyterLab advanced settings
+- Nested columns names using multi-part dot seperated paths
+- Support for spaces in nested columns names (backtiks each segment)
+- Visually distinct icons for `table`, `column`, `alias`, `functions` suggestions
+- Added support for code-completion of
+	- Functions including descriptions
+	- Table alias
+	- Table alias followed by dot
+	- Partially typed columns including multi-part fields (needed insertText)
 
-- support for spaces in column names, code complete with back ticks (future work)
+
 - no support for fully qualified table names `databaseName.schemaName.tableName` (might be something we want to support)
 
 
@@ -70,15 +71,15 @@ In JupyterLab it's going to look for a 500 bytes cli.js script in the location `
 
 JupyterLab logs you should see these lines
 ```
-<LspStdIoReader(parent=<LanguageServerSession(language_server=sql-language-server, argv=['/usr/local/bin/node', '/Users/jc/notebooks/node_modules/sql-language-server/dist/bin/cli.js', 'up', '--method', 'stdio'])>)> 
+<LspStdIoReader(parent=<LanguageServerSession(language_server=sql-language-server, argv=['/usr/local/bin/node', 'node_modules/sql-language-server/dist/bin/cli.js', 'up', '--method', 'stdio'])>)> 
 
-D 2021-08-06 10:37:37.104 ServerApp] Checking for /Users/jc/notebooks/node_modules/sql-language-server/dist/bin/cli.js
+D 2021-08-06 10:37:37.104 ServerApp] Checking for node_modules/sql-language-server/dist/bin/cli.js
 
 [D 2021-08-06 10:42:50.690 ServerApp] [lsp] The following Language Servers will be available: {
       "sql-language-server": {
         "argv": [
           "/usr/local/bin/node",
-          "/Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server/dist/bin/cli.js",
+          "miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server/dist/bin/cli.js",
           "up",
           "--method",
           "stdio"
@@ -108,19 +109,17 @@ $ npm run prepublish
 ```
 
 
-JupyterLab installed the plugin in `~/notebooks/node_modules/sql-language-server`
-# Swapping original with our own version
+# Linking Development Build
 
 ```
 
-mv /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/sql-language-server.back
+cd sql-language-server/packages/server
+npm link
 
-cd /Users/jc/miniconda3/envs/jupyterlab-ext/share/jupyter/lab/staging/node_modules/
+# Check that it worked
+ls -lh /Users/jc/miniconda3/envs/jupyterlab-ext/lib/node_modules/sql-language-server
 
-ln -s /Users/jc/jupyter-ext/sql-language-server/packages/server/ ./sql-language-server
-
-$ ls sql-language-server
-lrwxr-xr-x  1 jc  staff    62B 20 Aug 17:06 sql-language-server@ -> /Users/jc/jupyter-ext/sql-language-server/packages/server/
+lrwxr-xr-x  1 jc  staff    62B 23 Aug 08:11 /Users/jccote/miniconda3/envs/jupyterlab-ext/lib/node_modules/sql-language-server@ -> ../../../../../jupyter-ext/sql-language-server/packages/server
 
 ```
 
@@ -132,7 +131,6 @@ $ npm run prepublish
 
 # launching jupyter lab
 ```
-cd ~/notebooks
 $ jupyter lab --log-level=DEBUG > jupyterlab.log 2>&1
 ```
 
@@ -191,7 +189,7 @@ You can see in the `.virtual_documents` folder the code that transclusions extra
                         {
                             "name": "jupyterlab-conf",
                             "adapter": "json",   
-                            "filename": "/Users/jc/jupyter-ext/sql-language-server/packages/server/test/fixtures/schema-file-example.json"
+                            "filename": "/Users/jc/jupyter-ext/sql-language-server/packages/server/test/fixtures/schema.json"
                         }
                     ],
                         
@@ -233,7 +231,7 @@ This will build a 4MB `dist/cli.js` file. This is how I soft link the original e
 ```
 $ cd ~/.vscode/extensions/joe-re.sql-language-server-0.12.0/packages/server/dist
 $ mv cli.js cli.js.orig
-$ ln -s  ~/notebooks/sql-language-server/packages/server/dist/cli.js cli.js
+$ ln -s  sql-language-server/packages/server/dist/cli.js cli.js
 ```
 
 I had issues with spawn-sync, is it because of a newer version of npm? What I did to fix it is include the dependency in the project.
@@ -261,7 +259,7 @@ However they don't seem to be sent to the calling application JupyterLab/VsCode.
 ## Running Test Cases using Jest
 
 ```
-cd ~/notebooks/sql-language-server/packages/server
+cd sql-language-server/packages/server
 npm run test
 ```
 

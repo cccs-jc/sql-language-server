@@ -790,9 +790,11 @@ column =
   name:column_name !{ return reservedMap[name.toUpperCase()] === true; } {
     return name;
   }
-  / '`' chars:[^`]+ '`' {
-    return chars.join('');
+  / backtik_column ([.] backtik_column)* {
+    return text();
   }
+
+backtik_column = '`' chars:[^`]+ '`'
 
 // cccs-jc: added dot to support column names like `student.books.chapters`
 column_name

@@ -30,14 +30,18 @@ describe('nested columns', () => {
  
    it('back ticked columns success to parse', () => {
      const sql = '\
-       SELECT `tab1.y.z`, tab1.`col1.sub1` \
+       SELECT \
+       `tab1.y.z`,\
+       tab1.`col1`.`sub1`,\
+       `nestedwithspaces`.`sub field`.`sub field2`\
        FROM T1 as tab1 \
      '
       const result = parse(sql)
       expect(result).toBeDefined()
       expect(result).toMatchObject({ type: 'select' })
       // This is not technically correct since it does not detect the table
-      expect(result.columns[0].expr).toMatchObject({ column: 'tab1.y.z', table: '', type: 'column_ref' })
-      expect(result.columns[1].expr).toMatchObject({ column: 'col1.sub1', table: 'tab1', type: 'column_ref' })
+      expect(result.columns[0].expr).toMatchObject({ column: '`tab1.y.z`', table: '', type: 'column_ref' })
+      expect(result.columns[1].expr).toMatchObject({ column: '`col1`.`sub1`', table: 'tab1', type: 'column_ref' })
+      expect(result.columns[2].expr).toMatchObject({ column: '`sub field`.`sub field2`', table: 'nestedwithspaces', type: 'column_ref' })
    })
  })

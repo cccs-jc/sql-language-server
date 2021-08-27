@@ -376,7 +376,9 @@ const SIMPLE_NESTED_SCHEMA = {
         { columnName: 'abc.def.ghi', description: '' },
         { columnName: 'x', description: '' },
         { columnName: 'x.y', description: '' },
-        { columnName: 'x.y.z', description: '' }
+        { columnName: 'x.y.z', description: '' },
+        { columnName: '`with spaces`', description: '' },
+        { columnName: '`with spaces`.`sub space`', description: '' }
       ]
     }
   ],
@@ -417,13 +419,15 @@ describe('Nested ColumnName completion', () => {
 
   test("complete ColumnName:cursor on first char:using alias", () => {
     const result = complete('SELECT t.x.y.z, t. FROM TABLE1 as t', { line: 0, column: 18 }, SIMPLE_NESTED_SCHEMA)
-    expect(result.candidates.length).toEqual(6)
+    expect(result.candidates.length).toEqual(8)
     expect(result.candidates[0].label).toEqual('abc')
     expect(result.candidates[1].label).toEqual('abc.def')
     expect(result.candidates[2].label).toEqual('abc.def.ghi')
     expect(result.candidates[3].label).toEqual('x')
     expect(result.candidates[4].label).toEqual('x.y')
     expect(result.candidates[5].label).toEqual('x.y.z')
+    expect(result.candidates[6].label).toEqual('`with spaces`')
+    expect(result.candidates[7].label).toEqual('`with spaces`.`sub space`')
   })
 
   test("complete ColumnName:cursor on first char:using alias", () => {
@@ -442,6 +446,15 @@ describe('Nested ColumnName completion', () => {
     expect(result.candidates[1].label).toEqual('abc.def.ghi')
     expect(result.candidates[0].insertText).toEqual('f')
     expect(result.candidates[1].insertText).toEqual('f.ghi')
+  })
+
+  test("complete ColumnName with space:cursor on first char", () => {
+    const result = complete('SELECT t.`with FROM TABLE1 as t', { line: 0, column: 14 }, SIMPLE_NESTED_SCHEMA)
+    expect(result.candidates.length).toEqual(2)
+    expect(result.candidates[0].label).toEqual('`with spaces`')
+    expect(result.candidates[1].label).toEqual('`with spaces`.`sub space`')
+    expect(result.candidates[0].insertText).toEqual(' spaces`')
+    expect(result.candidates[1].insertText).toEqual(' spaces`.`sub space`')
   })
 })
 
