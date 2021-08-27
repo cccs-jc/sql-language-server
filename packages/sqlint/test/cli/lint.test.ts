@@ -46,6 +46,32 @@ describe('lint', () => {
   describe('input text', () => {
     it('should do lint input text', () => {
       const result = lint({
+        text: 'SELECT bar.x FROM bar',
+        formatType: 'json',
+        configPath: `${__dirname}/fixtures/lint`
+      })
+      const parsed = JSON.parse(result)
+      expect(parsed.length).toEqual(1)
+      expect(parsed[0].diagnostics.length).toEqual(0)
+    })
+  })
+
+  describe('input text', () => {
+    it('lint nested column names', () => {
+      const result = lint({
+        text: 'SELECT bar.x.y, a.b.c, `a.b.c` FROM bar',
+        formatType: 'json',
+        configPath: `${__dirname}/fixtures/lint`
+      })
+      const parsed = JSON.parse(result)
+      expect(parsed.length).toEqual(1)
+      expect(parsed[0].diagnostics.length).toEqual(0)
+    })
+  })
+
+  describe('input text', () => {
+    it('should do lint input text', () => {
+      const result = lint({
         text: 'select * from bar',
         formatType: 'json',
         configPath: `${__dirname}/fixtures/lint`

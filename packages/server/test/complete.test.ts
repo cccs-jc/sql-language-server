@@ -1,5 +1,19 @@
 import complete from '../src/complete'
 
+import createDiagnostics from '../src/createDiagnostics'
+
+describe('test diagnostics', () => {
+  test("parse nested is now supported, checking we are picking correct version", () => {
+    const sql: string = `SELECT
+    tab1.x.y
+    FROM
+    TABLE1 as tab1
+    `;
+    const result = createDiagnostics('', sql, null)
+    expect(result.diagnostics.length).toEqual(0)
+  })
+})
+
 describe('keyword completion', () => {
   test("complete 'SELECT' keyword", () => {
     const result = complete('S', { line: 0, column: 1 })

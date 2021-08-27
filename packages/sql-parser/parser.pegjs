@@ -794,7 +794,13 @@ column =
     return chars.join('');
   }
 
-column_name 
+// cccs-jc: added dot to support column names like `student.books.chapters`
+column_name
+  = ident_start column_part* ([.] column_part+)* {
+     return text();
+  }
+
+column_nameY
   =  start:ident_start parts:column_part* { return start + parts.join(''); }
 
 ident_name  
@@ -805,7 +811,7 @@ ident_start = [A-Za-z_]
 ident_part  = [A-Za-z0-9_]
 
 //to support column name like `cf1:name` in hbase
-column_part  = [A-Za-z0-9_:.]
+column_part  = [A-Za-z0-9_:]
 
 
 param 

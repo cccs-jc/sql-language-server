@@ -6,7 +6,7 @@ describe('UPDATE JOIN', () => {
     const sql = '\
       UPDATE T1 \
       JOIN T2 \
-      ON T1.t2_id.x = `T2.id.x` \
+      ON T1.t2_id = T2.id \
       SET T1.name = T2.name \
       WHERE T1.name = 1 \
     '

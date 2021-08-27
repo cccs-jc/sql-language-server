@@ -18,7 +18,7 @@ describe('Subquery in where clause', () => {
 describe('Subquery in where clause', () => {
   it('should success to parse', () => {
      const sql = '\
-       SELECT x.y.z, `x.y.z` \
+       SELECT * \
        FROM T1 as x \
        WHERE T1.num = (SELECT max(T2.num) from T2) \
      '
