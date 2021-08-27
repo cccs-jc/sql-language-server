@@ -100,10 +100,10 @@ function toCompletionItemFromColumn(tableName: string, column: Column): Completi
   }
 }
 
-function getTableAndColumnCondidates(tablePrefix: string, schema: Schema, option?: { withoutTable?: boolean, withoutColumn?: boolean }): CompletionItem[] {
-  const tableCandidates = schema.filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
+function getTableAndColumnCondidates(tablePrefix: string, tables: Table[], option?: { withoutTable?: boolean, withoutColumn?: boolean }): CompletionItem[] {
+  const tableCandidates = tables.filter(v => v.tableName.startsWith(tablePrefix)).map(v => toCompletionItemFromTable(v))
   const columnCandidates = Array.prototype.concat.apply([],
-    schema.filter(v => tableCandidates.map(v => v.label).includes(v.tableName)).map(v => v.columns)
+    tables.filter(v => tableCandidates.map(v => v.label).includes(v.tableName)).map(v => v.columns)
   ).map((v: Column) => toCompletionItemFromColumn(tablePrefix, v))
 
   const candidates: CompletionItem[] = []
@@ -167,7 +167,7 @@ function getCandidatedFromIncompleteSubquery(params: {
   return candidates
 }
 
-function createTablesFromFromNodes(fromNodes: FromTableNode[]): Schema {
+function createTablesFromFromNodes(fromNodes: FromTableNode[]): Table[] {
   return fromNodes.reduce((p: any, c) => {
     if (c.type !== 'subquery') {
       return p
@@ -195,8 +195,8 @@ type AttachedAlias = {
   refName: string,
 }
 
-function findTable(fromNodes: FromTableNode[], schema: Schema, partialColumName: string): AttachedAlias | undefined {
-  const attachedAlias: AttachedAlias[] = schema.map(v => {
+function findTable(fromNodes: FromTableNode[], tables: Table[], partialColumName: string): AttachedAlias | undefined {
+  const attachedAlias: AttachedAlias[] = tables.map(v => {
     const as = fromNodes.filter((v2: any) => v.tableName === v2.table).map(v => v.as)
     return { table: v, as: as ? as : [], refName: '' }
   })
@@ -223,8 +223,8 @@ function findTable(fromNodes: FromTableNode[], schema: Schema, partialColumName:
   return found
 }
 
-function findAlias(fromNodes: FromTableNode[], schema: Schema, partialName: string): string[] {
-  const attachedAlias: AttachedAlias[] = schema.map(v => {
+function findAlias(fromNodes: FromTableNode[], tables: Table[], partialName: string): string[] {
+  const attachedAlias: AttachedAlias[] = tables.map(v => {
     const as = fromNodes.filter((v2: any) => v.tableName === v2.table).map(v => v.as)
     return { table: v, as: as ? as : [], refName: '' }
   })
@@ -250,12 +250,12 @@ function findAlias(fromNodes: FromTableNode[], schema: Schema, partialName: stri
   return aliasArray
 }
 
-function getCandidatesFromError(target: string, schema: Schema, functions: DbFunction[], pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
+function getCandidatesFromError(target: string, schema: Schema, pos: Pos, e: any, fromNodes: FromTableNode[]): CompletionItem[] {
   switch (e.message) {
     // 'INSERT INTO TABLE1 (C'
     // 'UPDATE TABLE1 SET C'
     case 'EXPECTED COLUMN NAME': {
-      return getTableAndColumnCondidates('', schema, { withoutTable: true })
+      return getTableAndColumnCondidates('', schema.tables, { withoutTable: true })
     }
   }
   let candidates = extractExpectedLiterals(e.expected || [])
@@ -281,7 +281,7 @@ function getCandidatesFromError(target: string, schema: Schema, functions: DbFun
   // 'UPDATE FOO S'
   // 'SELECT TABLE1.COLUMN1 FROM TABLE WHERE T'
   if (candidatesLiterals.includes('.')) {
-    candidates = candidates.concat(schema.map(v => toCompletionItemFromTable(v)))
+    candidates = candidates.concat(schema.tables.map(v => toCompletionItemFromTable(v)))
   }
   const lastChar = target[target.length - 1]
   logger.debug(`lastChar: ${lastChar}`)
@@ -293,9 +293,9 @@ function getCandidatesFromError(target: string, schema: Schema, functions: DbFun
   }
   const partialName = getLastTokenIncludingDot(target)
   const subqueryTables = createTablesFromFromNodes(fromNodes)
-  const schemaAndSubqueries = schema.concat(subqueryTables)
+  const schemaAndSubqueries = schema.tables.concat(subqueryTables)
 
-  let functionCandidates = getFunctionCondidates(partialName, functions)
+  let functionCandidates = getFunctionCondidates(partialName, schema.functions)
   candidates = candidates.concat(functionCandidates)
 
   let found = findTable(fromNodes, schemaAndSubqueries, partialName)
@@ -327,16 +327,16 @@ function getRidOfAfterCursorString(sql: string, pos: Pos) {
   return sql.split('\n').filter((_v, idx) => pos.line >= idx).map((v, idx) => idx === pos.line ? v.slice(0, pos.column) : v).join('\n')
 }
 
-function completeDeleteStatement(ast: DeleteStatement, pos: Pos, schema: Schema): CompletionItem[] {
+function completeDeleteStatement(ast: DeleteStatement, pos: Pos, tables: Table[]): CompletionItem[] {
   if (isPosInLocation(ast.table.location, pos)) {
-    return getTableAndColumnCondidates('', schema, { withoutColumn: true })
+    return getTableAndColumnCondidates('', tables, { withoutColumn: true })
   } else if (ast.where && isPosInLocation(ast.where.expression.location, pos)) {
-    return getTableAndColumnCondidates('', schema, { withoutTable: true })
+    return getTableAndColumnCondidates('', tables, { withoutTable: true })
   }
   return []
 }
 
-function completeSelectStatement(ast: SelectStatement, _pos: Pos, _schema: Schema): CompletionItem[] {
+function completeSelectStatement(ast: SelectStatement, _pos: Pos, _tables: Table[]): CompletionItem[] {
   let candidates: CompletionItem[] = []
   if (Array.isArray(ast.columns)) {
     const first = ast.columns[0]
@@ -352,7 +352,7 @@ function completeSelectStatement(ast: SelectStatement, _pos: Pos, _schema: Schem
   return candidates
 }
 
-export default function complete(sql: string, pos: Pos, schema: Schema = [], functions: DbFunction[] = []) {
+export default function complete(sql: string, pos: Pos, schema: Schema = { tables: [], functions: [] }) {
   logger.debug(`complete: ${sql}, ${JSON.stringify(pos)}`)
   let candidates: CompletionItem[] = []
   let error = null;
@@ -364,13 +364,13 @@ export default function complete(sql: string, pos: Pos, schema: Schema = [], fun
     const ast = parse(target);
     logger.debug(`ast: ${JSON.stringify(ast)}`)
     if (ast.type === 'delete') {
-      candidates = completeDeleteStatement(ast, pos, schema)
+      candidates = completeDeleteStatement(ast, pos, schema.tables)
     } else {
       if (ast.type === 'select' && !ast.distinct) {
         candidates.push({ label: 'DISTINCT', kind: CompletionItemKind.Text })
       }
       if (ast.type === 'select') {
-        candidates = candidates.concat(completeSelectStatement(ast, pos, schema))
+        candidates = candidates.concat(completeSelectStatement(ast, pos, schema.tables))
       }
       const columns = ast.columns
       if (Array.isArray(columns)) {
@@ -390,13 +390,13 @@ export default function complete(sql: string, pos: Pos, schema: Schema = [], fun
         logger.debug(JSON.stringify(columnRef))
         if (columnRef) {
           if (columnRef.table?.length > 0) {
-            let tableCandidates = getTableAndColumnCondidates(columnRef.table, schema, { withoutColumn: true })
+            let tableCandidates = getTableAndColumnCondidates(columnRef.table, schema.tables, { withoutColumn: true })
             candidates = candidates.concat(tableCandidates)
             let partialColumName = columnRef.table + '.' + columnRef.column
             const parsedFromClause = getFromNodesFromClause(sql)
             const fromNodes = parsedFromClause?.from?.tables || []
             const subqueryTables = createTablesFromFromNodes(fromNodes)
-            const schemaAndSubqueries = schema.concat(subqueryTables)
+            const schemaAndSubqueries = schema.tables.concat(subqueryTables)
             let found = findTable(fromNodes, schemaAndSubqueries, partialColumName)
             if (found) {
               let refName = found.refName
@@ -405,15 +405,15 @@ export default function complete(sql: string, pos: Pos, schema: Schema = [], fun
             }
           }
           else {
-            let functionCandidates = getFunctionCondidates(columnRef.column, functions)
+            let functionCandidates = getFunctionCondidates(columnRef.column, schema.functions)
             candidates = candidates.concat(functionCandidates)
-            let tableCandidates = getTableAndColumnCondidates(columnRef.column, schema, { withoutColumn: true })
+            let tableCandidates = getTableAndColumnCondidates(columnRef.column, schema.tables, { withoutColumn: true })
             candidates = candidates.concat(tableCandidates)
             let partialAliasName = columnRef.column
             const parsedFromClause = getFromNodesFromClause(sql)
             const fromNodes = parsedFromClause?.from?.tables || []
             const subqueryTables = createTablesFromFromNodes(fromNodes)
-            const schemaAndSubqueries = schema.concat(subqueryTables)
+            const schemaAndSubqueries = schema.tables.concat(subqueryTables)
             let aliasArray = findAlias(fromNodes, schemaAndSubqueries, partialAliasName)
             if (aliasArray.length > 0) {
               let aliasCandidates = aliasArray.map(v => toCompletionItemFromAlias(v))
@@ -426,7 +426,7 @@ export default function complete(sql: string, pos: Pos, schema: Schema = [], fun
       if (ast.type === 'select' && Array.isArray(ast.from?.tables)) {
         const fromTable = getFromNodeByPos(ast.from?.tables || [], pos)
         if (fromTable && fromTable.type === 'table') {
-          candidates = candidates.concat(schema.map(v => toCompletionItemFromTable(v)))
+          candidates = candidates.concat(schema.tables.map(v => toCompletionItemFromTable(v)))
             .concat([{ label: 'INNER JOIN' }, { label: 'LEFT JOIN' }])
           if (fromTable.join && !fromTable.on) {
             candidates.push({ label: 'ON' })
@@ -453,7 +453,7 @@ export default function complete(sql: string, pos: Pos, schema: Schema = [], fun
         schema
       })
     } else {
-      candidates = getCandidatesFromError(target, schema, functions, pos, e, fromNodes)
+      candidates = getCandidatesFromError(target, schema, pos, e, fromNodes)
     }
     error = { label: e.name, detail: e.message, line: e.line, offset: e.offset }
   }

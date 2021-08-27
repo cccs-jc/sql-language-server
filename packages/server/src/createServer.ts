@@ -13,7 +13,7 @@ import createDiagnostics from './createDiagnostics'
 import createConnection from './createConnection'
 import yargs from 'yargs'
 import SettingStore from './SettingStore'
-import { Schema, DbFunction } from './database_libs/AbstractClient'
+import { Schema } from './database_libs/AbstractClient'
 import getDatabaseClient from './database_libs/getDatabaseClient'
 import initializeLogging from './initializeLogging'
 import { lint, LintResult } from 'sqlint'
@@ -40,8 +40,7 @@ export function createServerWithConnection(connection: Connection) {
   const logger = log4js.getLogger()
   let documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
   documents.listen(connection);
-  let schema: Schema = []
-  let functions: DbFunction[] = []
+  let schema: Schema = { tables: [], functions: [] }
   let hasConfigurationCapability = false
   let rootPath = ''
   let lintConfig: RawConfig | null | undefined
@@ -133,9 +132,7 @@ export function createServerWithConnection(connection: Connection) {
           }
 
           try {
-            let config = JSON.parse(readFile(path));
-            schema = config.tables
-            functions = config.functions
+            schema = JSON.parse(readFile(path));
           }
           catch (e) {
             logger.error("failed to read schema file")
@@ -212,7 +209,7 @@ export function createServerWithConnection(connection: Connection) {
     }
     logger.debug(text || '')
     let pos = { line: docParams.position.line, column: docParams.position.character }
-    const candidates = complete(text, pos, schema, functions).candidates
+    const candidates = complete(text, pos, schema).candidates
     logger.debug(candidates.map(v => v.insertText || v.label).join(","))
     return candidates
   })

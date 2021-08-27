@@ -82,47 +82,48 @@ describe('keyword completion', () => {
   })
 })
 
-const SIMPLE_SCHEMA = [
-  {
-    database: null,
-    tableName: 'TABLE1',
-    columns: [
-      { columnName: 'COLUMN1', description: '' },
-      { columnName: 'COLUMN2', description: '' }
-    ]
-  }
-]
-
-const FUNCTIONS = [
-  {
-    name: 'array_concat()',
-    description: 'desc1'
-  },
-  {
-    name: 'array_contains()',
-    description: 'desc2'
-  }
-]
+const SIMPLE_SCHEMA = {
+  tables: [
+    {
+      database: null,
+      tableName: 'TABLE1',
+      columns: [
+        { columnName: 'COLUMN1', description: '' },
+        { columnName: 'COLUMN2', description: '' }
+      ]
+    }
+  ],
+  functions: [
+    {
+      name: 'array_concat()',
+      description: 'desc1'
+    },
+    {
+      name: 'array_contains()',
+      description: 'desc2'
+    }
+  ]
+}
 
 describe('on blank space', () => {
   test("complete ", () => {
-    const result = complete('', { line: 0, column: 0 }, SIMPLE_SCHEMA, FUNCTIONS)
+    const result = complete('', { line: 0, column: 0 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(8)
     let expected = [
-      expect.objectContaining({label: 'SELECT'}),
-      expect.objectContaining({label: 'WHERE'}),
-      expect.objectContaining({label: 'ORDER BY'}),
-      expect.objectContaining({label: 'GROUP BY'}),
-      expect.objectContaining({label: 'LIMIT'}),
-      expect.objectContaining({label: '--'}),
-      expect.objectContaining({label: '/*'}),
-      expect.objectContaining({label: '('}),
+      expect.objectContaining({ label: 'SELECT' }),
+      expect.objectContaining({ label: 'WHERE' }),
+      expect.objectContaining({ label: 'ORDER BY' }),
+      expect.objectContaining({ label: 'GROUP BY' }),
+      expect.objectContaining({ label: 'LIMIT' }),
+      expect.objectContaining({ label: '--' }),
+      expect.objectContaining({ label: '/*' }),
+      expect.objectContaining({ label: '(' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
 
   test("complete inside SELECT", () => {
-    const result = complete('SELECT ', { line: 0, column: 7 }, SIMPLE_SCHEMA, FUNCTIONS)
+    const result = complete('SELECT ', { line: 0, column: 7 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(13) // TODO whare are they?
     expect(result.candidates[11].label).toEqual('array_concat()')
     expect(result.candidates[12].label).toEqual('array_contains()')
@@ -131,14 +132,14 @@ describe('on blank space', () => {
 
 describe('TableName completion', () => {
   test("complete function keyword", () => {
-    const result = complete('SELECT arr', { line: 0, column: 10 }, SIMPLE_SCHEMA, FUNCTIONS)
+    const result = complete('SELECT arr', { line: 0, column: 10 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     expect(result.candidates[0].label).toEqual('array_concat()')
     expect(result.candidates[1].label).toEqual('array_contains()')
   })
 
   test("complete function keyword", () => {
-    const result = complete('SELECT ARR', { line: 0, column: 10 }, SIMPLE_SCHEMA, FUNCTIONS)
+    const result = complete('SELECT ARR', { line: 0, column: 10 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     expect(result.candidates[0].label).toEqual('ARRAY_CONCAT()')
     expect(result.candidates[1].label).toEqual('ARRAY_CONTAINS()')
@@ -166,8 +167,8 @@ describe('ColumnName completion', () => {
     const result = complete('SELECT TABLE1.C FROM TABLE1', { line: 0, column: 15 }, SIMPLE_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({label: 'COLUMN1', insertText: 'OLUMN1'}),
-      expect.objectContaining({label: 'COLUMN2', insertText: 'OLUMN2'}),
+      expect.objectContaining({ label: 'COLUMN1', insertText: 'OLUMN1' }),
+      expect.objectContaining({ label: 'COLUMN2', insertText: 'OLUMN2' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -308,33 +309,36 @@ describe('cursor on dot', () => {
 
   test("not complete when ", () => {
     const result = complete('SELECT    FROM TABLE1', { line: 0, column: 8 }, SIMPLE_SCHEMA)
-    expect(result.candidates.length).toEqual(11) // TODO what are they?
+    expect(result.candidates.length).toEqual(13) // TODO what are they?
   })
 })
 
-const SIMPLE_NESTED_SCHEMA = [
-  {
-    database: null,
-    tableName: 'TABLE1',
-    columns: [
-      { columnName: 'abc', description: '' },
-      { columnName: 'abc.def', description: '' },
-      { columnName: 'abc.def.ghi', description: '' },
-      { columnName: 'x', description: '' },
-      { columnName: 'x.y', description: '' },
-      { columnName: 'x.y.z', description: '' }
-    ]
-  }
-]
+const SIMPLE_NESTED_SCHEMA = {
+  tables: [
+    {
+      database: null,
+      tableName: 'TABLE1',
+      columns: [
+        { columnName: 'abc', description: '' },
+        { columnName: 'abc.def', description: '' },
+        { columnName: 'abc.def.ghi', description: '' },
+        { columnName: 'x', description: '' },
+        { columnName: 'x.y', description: '' },
+        { columnName: 'x.y.z', description: '' }
+      ]
+    }
+  ],
+  functions: []
+}
 
 describe('Nested ColumnName completion', () => {
   test("complete ColumnName", () => {
     const result = complete('SELECT TABLE1.a FROM TABLE1', { line: 0, column: 15 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(3)
     let expected = [
-      expect.objectContaining({label: 'abc', insertText: 'bc'}),
-      expect.objectContaining({label: 'abc.def', insertText: 'bc.def'}),
-      expect.objectContaining({label: 'abc.def.ghi', insertText: 'bc.def.ghi'}),
+      expect.objectContaining({ label: 'abc', insertText: 'bc' }),
+      expect.objectContaining({ label: 'abc.def', insertText: 'bc.def' }),
+      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'bc.def.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -343,8 +347,8 @@ describe('Nested ColumnName completion', () => {
     const result = complete('SELECT TABLE1.abc. FROM TABLE1', { line: 0, column: 18 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({label: 'abc.def', insertText: 'def'}),
-      expect.objectContaining({label: 'abc.def.ghi', insertText: 'def.ghi'}),
+      expect.objectContaining({ label: 'abc.def', insertText: 'def' }),
+      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'def.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -353,8 +357,8 @@ describe('Nested ColumnName completion', () => {
     const result = complete('SELECT TABLE1.abc.d FROM TABLE1', { line: 0, column: 19 }, SIMPLE_NESTED_SCHEMA)
     expect(result.candidates.length).toEqual(2)
     let expected = [
-      expect.objectContaining({label: 'abc.def', insertText: 'ef'}),
-      expect.objectContaining({label: 'abc.def.ghi', insertText: 'ef.ghi'}),
+      expect.objectContaining({ label: 'abc.def', insertText: 'ef' }),
+      expect.objectContaining({ label: 'abc.def.ghi', insertText: 'ef.ghi' }),
     ]
     expect(result.candidates).toEqual(expect.arrayContaining(expected))
   })
@@ -368,7 +372,7 @@ describe('Nested ColumnName completion', () => {
     expect(result.candidates[3].label).toEqual('x')
     expect(result.candidates[4].label).toEqual('x.y')
     expect(result.candidates[5].label).toEqual('x.y.z')
-})
+  })
 
   test("complete ColumnName:cursor on first char:using alias", () => {
     const result = complete('SELECT t.abc. FROM TABLE1 as t', { line: 0, column: 13 }, SIMPLE_NESTED_SCHEMA)
@@ -389,87 +393,90 @@ describe('Nested ColumnName completion', () => {
   })
 })
 
-const COMPLEX_SCHEMA = [
-  {
-    database: null,
-    tableName: 'employees',
-    columns: [
-      { columnName: 'job_id', description: '' },
-      { columnName: 'employee_id', description: '' },
-      { columnName: 'manager_id', description: '' },
-      { columnName: 'department_id', description: '' },
-      { columnName: 'first_name', description: '' },
-      { columnName: 'last_name', description: '' },
-      { columnName: 'email', description: '' },
-      { columnName: 'phone_number', description: '' },
-      { columnName: 'hire_date', description: '' },
-      { columnName: 'salary', description: '' },
-      { columnName: 'commision_pct', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'jobs',
-    columns: [
-      { columnName: 'job_id', description: '' },
-      { columnName: 'job_title', description: '' },
-      { columnName: 'min_salary', description: '' },
-      { columnName: 'max_salary', description: '' },
-      { columnName: 'created_at', description: '' },
-      { columnName: 'updated_at', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'job_history',
-    columns: [
-      { columnName: 'employee_id', description: '' },
-      { columnName: 'start_date', description: '' },
-      { columnName: 'end_date', description: '' },
-      { columnName: 'job_id', description: '' },
-      { columnName: 'department_id', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'departments',
-    columns: [
-      { columnName: 'department_id', description: '' },
-      { columnName: 'department_name', description: '' },
-      { columnName: 'manager_id', description: '' },
-      { columnName: 'location_id', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'locations',
-    columns: [
-      { columnName: 'location_id', description: '' },
-      { columnName: 'street_address', description: '' },
-      { columnName: 'postal_code', description: '' },
-      { columnName: 'city', description: '' },
-      { columnName: 'state_province', description: '' },
-      { columnName: 'country_id', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'countries',
-    columns: [
-      { columnName: 'country_id', description: '' },
-      { columnName: 'country_name', description: '' },
-      { columnName: 'region_id', description: '' },
-    ]
-  },
-  {
-    database: null,
-    tableName: 'regions',
-    columns: [
-      { columnName: 'region_id', description: '' },
-      { columnName: 'region_name', description: '' },
-    ]
-  },
-]
+const COMPLEX_SCHEMA = {
+  tables: [
+    {
+      database: null,
+      tableName: 'employees',
+      columns: [
+        { columnName: 'job_id', description: '' },
+        { columnName: 'employee_id', description: '' },
+        { columnName: 'manager_id', description: '' },
+        { columnName: 'department_id', description: '' },
+        { columnName: 'first_name', description: '' },
+        { columnName: 'last_name', description: '' },
+        { columnName: 'email', description: '' },
+        { columnName: 'phone_number', description: '' },
+        { columnName: 'hire_date', description: '' },
+        { columnName: 'salary', description: '' },
+        { columnName: 'commision_pct', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'jobs',
+      columns: [
+        { columnName: 'job_id', description: '' },
+        { columnName: 'job_title', description: '' },
+        { columnName: 'min_salary', description: '' },
+        { columnName: 'max_salary', description: '' },
+        { columnName: 'created_at', description: '' },
+        { columnName: 'updated_at', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'job_history',
+      columns: [
+        { columnName: 'employee_id', description: '' },
+        { columnName: 'start_date', description: '' },
+        { columnName: 'end_date', description: '' },
+        { columnName: 'job_id', description: '' },
+        { columnName: 'department_id', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'departments',
+      columns: [
+        { columnName: 'department_id', description: '' },
+        { columnName: 'department_name', description: '' },
+        { columnName: 'manager_id', description: '' },
+        { columnName: 'location_id', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'locations',
+      columns: [
+        { columnName: 'location_id', description: '' },
+        { columnName: 'street_address', description: '' },
+        { columnName: 'postal_code', description: '' },
+        { columnName: 'city', description: '' },
+        { columnName: 'state_province', description: '' },
+        { columnName: 'country_id', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'countries',
+      columns: [
+        { columnName: 'country_id', description: '' },
+        { columnName: 'country_name', description: '' },
+        { columnName: 'region_id', description: '' },
+      ]
+    },
+    {
+      database: null,
+      tableName: 'regions',
+      columns: [
+        { columnName: 'region_id', description: '' },
+        { columnName: 'region_name', description: '' },
+      ]
+    },
+  ],
+  functions: []
+}
 
 test("conplete columns from alias that start chars same as other table", () => {
   const sql = `
