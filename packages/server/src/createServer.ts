@@ -5,7 +5,7 @@ import {
   TextDocumentPositionParams,
   CompletionItem,
 } from 'vscode-languageserver'
-import { TextDocument } from 'vscode-languageserver-textdocument' 
+import { TextDocument } from 'vscode-languageserver-textdocument'
 import { CodeAction, TextDocumentEdit, TextEdit, Position, CodeActionKind } from 'vscode-languageserver-types'
 import cache from './cache'
 import { complete } from './complete'
@@ -13,7 +13,7 @@ import createDiagnostics from './createDiagnostics'
 import createConnection from './createConnection'
 import yargs from 'yargs'
 import SettingStore from './SettingStore'
-import { Schema } from './database_libs/AbstractClient'
+import { Schema, DbFunction } from './database_libs/AbstractClient'
 import getDatabaseClient from './database_libs/getDatabaseClient'
 import initializeLogging from './initializeLogging'
 import { lint, LintResult } from 'sqlint'
@@ -26,7 +26,7 @@ import { RawConfig } from 'sqlint'
 
 export type ConnectionMethod = 'node-ipc' | 'stdio'
 type Args = {
-	method?: ConnectionMethod
+  method?: ConnectionMethod
 }
 
 // jcc to read schema file
@@ -41,6 +41,7 @@ export function createServerWithConnection(connection: Connection) {
   let documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
   documents.listen(connection);
   let schema: Schema = []
+  let functions: DbFunction[] = []
   let hasConfigurationCapability = false
   let rootPath = ''
   let lintConfig: RawConfig | null | undefined
@@ -83,7 +84,7 @@ export function createServerWithConnection(connection: Connection) {
 
     hasConfigurationCapability = !!capabilities.workspace && (
       !!capabilities.workspace.configuration ||
-      !!capabilities.workspace.didChangeConfiguration );
+      !!capabilities.workspace.didChangeConfiguration);
 
 
     logger.debug(`onInitialize: ${params.rootPath}`)
@@ -108,9 +109,9 @@ export function createServerWithConnection(connection: Connection) {
   })
 
   connection.onInitialized(async () => {
-  	SettingStore.getInstance().on('change', async () => {
+    SettingStore.getInstance().on('change', async () => {
       logger.debug('onInitialize: receive change event from SettingStore')
-  		try {
+      try {
         try {
           connection.sendNotification('sqlLanguageServer.finishSetup', {
             personalConfig: SettingStore.getInstance().getPersonalConfig(),
@@ -122,24 +123,27 @@ export function createServerWithConnection(connection: Connection) {
         // jcc: added check for loading schema from json file
         var setting = SettingStore.getInstance().getSetting()
         if (setting.adapter == 'json') {
-            var path = setting.filename || ""
-            if (path == "") {
-              logger.error("filename must be provided")
-              connection.sendNotification('sqlLanguageServer.error', {
-                  message: "filename must be provided"
-              })
-              throw "filename must be provided"
-            }
-            try {
-              schema = JSON.parse(readFile(path));
-            }
-            catch(e) {
-              logger.error("failed to read schema file")
-              connection.sendNotification('sqlLanguageServer.error', {
-                  message: "Failed to read schema file: " + path + " error: " + e.message
-              })
-              throw e
-            }
+          var path = setting.filename || ""
+          if (path == "") {
+            logger.error("filename must be provided")
+            connection.sendNotification('sqlLanguageServer.error', {
+              message: "filename must be provided"
+            })
+            throw "filename must be provided"
+          }
+
+          try {
+            let config = JSON.parse(readFile(path));
+            schema = config.tables
+            functions = config.functions
+          }
+          catch (e) {
+            logger.error("failed to read schema file")
+            connection.sendNotification('sqlLanguageServer.error', {
+              message: "Failed to read schema file: " + path + " error: " + e.message
+            })
+            throw e
+          }
         }
         else {
           // jcc: else get schema form database client
@@ -206,13 +210,11 @@ export function createServerWithConnection(connection: Connection) {
     if (!text) {
       return []
     }
-  	logger.debug(text || '')
-  	const candidates = complete(text, {
-  		line: docParams.position.line,
-  		column: docParams.position.character
-  	}, schema).candidates
-  	logger.debug(candidates.map(v => v.label).join(","))
-  	return candidates
+    logger.debug(text || '')
+    let pos = { line: docParams.position.line, column: docParams.position.character }
+    const candidates = complete(text, pos, schema, functions).candidates
+    logger.debug(candidates.map(v => v.insertText || v.label).join(","))
+    return candidates
   })
 
   connection.onCodeAction(params => {
@@ -238,14 +240,14 @@ export function createServerWithConnection(connection: Connection) {
       return []
     }
     const action = CodeAction.create(`fix: ${lintResult.diagnostic.message}`, {
-      documentChanges:[
+      documentChanges: [
         TextDocumentEdit.create({ uri: params.textDocument.uri, version: document.version }, fixes.map(v => {
           const edit = v.range.startOffset === v.range.endOffset
             ? TextEdit.insert(toPosition(text, v.range.startOffset), v.text)
             : TextEdit.replace({
-                start: toPosition(text, v.range.startOffset),
-                end: toPosition(text, v.range.endOffset)
-              }, v.text)
+              start: toPosition(text, v.range.startOffset),
+              end: toPosition(text, v.range.endOffset)
+            }, v.text)
           return edit
         }))
       ]
@@ -253,15 +255,19 @@ export function createServerWithConnection(connection: Connection) {
     action.diagnostics = params.context.diagnostics
     return [action]
   })
-  
+
   connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
+
+    //item.detail = 'TypeScript details';
+    if (item.label == 'abs()') {
+    }
     return item
   })
 
   connection.onExecuteCommand((request) => {
     logger.debug(`received executeCommand request: ${request.command}, ${request.arguments}`)
     if (request.command === 'switchDatabaseConnection') {
-      try{
+      try {
         SettingStore.getInstance().changeConnection(
           request.arguments && request.arguments[0] || ''
         )

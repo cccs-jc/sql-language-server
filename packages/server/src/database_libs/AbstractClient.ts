@@ -21,6 +21,11 @@ export type Table = {
   tableName: string,
   columns: Column[]
 }
+export type DbFunction = {
+  name: string,
+  description: string,
+}
+
 export type Schema = Table[]
 export default abstract class AbstractClient {
   connection: any
